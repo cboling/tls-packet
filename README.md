@@ -14,6 +14,6 @@ the users can tune for the performance they need.
 
 ## Release History
 
-| Version | Notes                                        |
-|:-------:|:---------------------------------------------|
-|  0.0.0  | Nothing yet.  Please stay come back later... |
+| Version | Notes                                                      |
+|:-------:|:-----------------------------------------------------------|
+|  0.0.1  | Initial build to get package installation scripts together |
