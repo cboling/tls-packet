@@ -118,6 +118,10 @@ class TLSClient:
     def tls_version(self) -> TLS:
         return self._tls_version
 
+    @property
+    def received_handshake_records(self) -> Tuple['TLSHandshakeRecord']:
+        return tuple(self._server_handshake_records_received)
+
     def debug_print(self, title, message, *, prefix=''):
         if self._debug:
             logging.info(prefix, title, message)

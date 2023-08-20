@@ -16,14 +16,15 @@
 
 from typing import Optional, Tuple, List
 
-from tls_packet.auth.security_params import SecurityParameters
 from transitions import Machine, State
 from transitions.extensions import GraphMachine
+
+from tls_packet.auth.security_params import SecurityParameters
 
 
 class TLSClientStateMachine(Machine):
     """
-    TLS Client State Machine: From RFC-8446: Appendix A.1. "
+    TLS Client State Machine: From RFC-8446: Appendix A.1
 
        This appendix provides a summary of the legal state transitions for
        the client and server handshakes.  State names (in all capitals,
@@ -304,12 +305,88 @@ class TLSClientStateMachine(Machine):
 
     def _client_key_exchange(self) -> 'TLSClientKeyExchange':
         from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange
+        from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange
+        from tls_packet.auth.tls_certificate import TLSCertificate
+        # Look up what the server sent us
+        server_certificate= next((record for record in self.session.received_handshake_records
+                                  if isinstance(record, TLSCertificate)), None)
+        server_key_exchange = next((record for record in self.session.received_handshake_records
+                                    if isinstance(record, TLSServerKeyExchange)), None)
+
+
+        return TLSClientKeyExchange.create(server_key_exchange, server_certificate)
+
+        public_key = self._session.public_key
+        private_key = self._session.private_key
+        self._session.keyh
+        self.public_key = keys.get("public")
+        self.private_key = keys.get("private")
+
         # certificate = self.session.certificate.tbs_certificate_bytes if self.session.certificate is not None else b''
         # ca_certificate = self.session.ca_certificate.tbs_certificate_bytes if self.session.ca_certificate is not None else b''
         # pub_cert = ASN_1_Cert(certificate)
         # ca_cert = ASN_1_Cert(ca_certificate)  # TODO: Need to support a list?
         # cert_list = ASN_1_CertList([pub_cert, ca_cert])
         return TLSClientKeyExchange()
+
+        #
+        # class _UnEncryptedPreMasterSecret(Raw):
+        #     """
+        #     When the content of an EncryptedPreMasterSecret could not be deciphered,
+        #     we use this class to represent the encrypted data.
+        #     """
+        #     name = "RSA Encrypted PreMaster Secret (protected)"
+        #
+        #     def __init__(self, *args, **kargs):
+        #         kargs.pop('tls_session', None)
+        #         return super(_UnEncryptedPreMasterSecret, self).__init__(*args, **kargs)  # noqa: E501
+
+        # class EncryptedPreMasterSecret(_GenericTLSSessionInheritance):
+        #     """
+        #     Pay attention to implementation notes in section 7.4.7.1 of RFC 5246.
+        #     """
+        #     name = "RSA Encrypted PreMaster Secret"
+        #     fields_desc = [_TLSClientVersionField("client_version", None,
+        #                                           _tls_version),
+        #                    StrFixedLenField("random", None, 46)]
+        # @classmethod
+        # def dispatch_hook(cls, _pkt=None, *args, **kargs):
+        #     if 'tls_session' in kargs:
+        #         s = kargs['tls_session']
+        #         if s.server_tmp_rsa_key is None and s.server_rsa_key is None:
+        #             return _UnEncryptedPreMasterSecret
+        #     return EncryptedPreMasterSecret
+        #
+        # def post_build(self, pkt, pay):
+        #     """
+        #     We encrypt the premaster secret (the 48 bytes) with either the server
+        #     certificate or the temporary RSA key provided in a server key exchange
+        #     message. After that step, we add the 2 bytes to provide the length, as
+        #     described in implementation notes at the end of section 7.4.7.1.
+        #     """
+        #     enc = pkt
+        #
+        #     s = self.tls_session
+        #     s.pre_master_secret = enc
+        #     s.compute_ms_and_derive_keys()
+        #
+        #     if s.server_tmp_rsa_key is not None:
+        #         enc = s.server_tmp_rsa_key.encrypt(pkt, t="pkcs")
+        #     elif s.server_certs is not None and len(s.server_certs) > 0:
+        #         enc = s.server_certs[0].encrypt(pkt, t="pkcs")
+        #     else:
+        #         warning("No material to encrypt Pre Master Secret")
+        #
+        #     tmp_len = b""
+        #     if s.tls_version >= 0x0301:
+        #         tmp_len = struct.pack("!H", len(enc))
+        #     return tmp_len + enc + pay
+
+        # For RSA, Clinege generates a random string of bytes called a pre-master
+        # secret, then encrypt it with the servers public key.
+
+        #     Pay attention to implementation notes in section 7.4.7.1 of RFC 5246.
+
 
     def _certificate_verify(self) -> 'TLSCertificateVerify':
         from tls_packet.auth.tls_certificate_verify import TLSCertificateVerify

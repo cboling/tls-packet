@@ -1,4 +1,4 @@
-# tls_packet
+# tls-packet
 Python TLS Packet decoder/serializer library with a focus on TLS packets used during 
 IEEE 802.1x/RADIUS interactions
 
