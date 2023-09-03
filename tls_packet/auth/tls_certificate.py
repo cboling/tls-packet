@@ -80,6 +80,31 @@ class ITUX509Cert:
 
     ExtensionSet EXTENSION ::= {...}
 
+    For RSA, subjectPublicKey BIT STRING is
+
+        RSAPublicKey ::= SEQUENCE {
+            modulus INTEGER, -- n
+            public Exponent INTEGER -- e -- }
+
+    For Diffie-Hellman,
+
+        DHPubliKey ::- INTEGER -- public key, y = g^x mod p
+        And the parameters are in the AlgorithmIdentifier
+
+        AlgorithmIdentifier ::- SEQUENCE {
+            algorythm       OBJECT IDENTIFIER,
+            parameters      ANY DEFINED by algorithm OPTIONAL }
+
+        DH -> DomainParameters :== SEQUENCE {
+            p   INTEGER, -- odd prime, p-jq +1
+            g   INTEGER, -- generator, G
+            q   INTEGER, -- factor of p-1
+            j   INTEGER OPTIONAL, -- subgroup factor
+            validationParms ValidationParms OPTIONAL }
+
+            ValidationParms ::= SEUENCE {
+               seed    BIT STRING,
+               pgenCounter  INTEGER }
 
     """
 
