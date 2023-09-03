@@ -131,6 +131,13 @@ class TLSClient:
             logging.error(msg)
             raise RuntimeError(msg)
 
+    def close(self) -> None:
+        sm, self.state_machine = self.state_machine, None
+        if sm is not None:
+            sm.close()
+
+        self.auth_state_machine = None
+
     def read(self, frame: bytes) -> Tuple[bytes, bytes, bytes]:
         record_layer, frame = frame[:5], frame[5:]
 
@@ -150,7 +157,7 @@ class TLSClient:
 
     # TODO:  Currently working on TLSClient to create a CLientHello insicde a TLSHandshake record.
 
-    def handle_tls_data(self, eap_id: int, eap_tls: 'EAP_TLS') -> None:
+    def handle_tls_data(self, eap_id: int, eap_tls: 'EAP_TLS', eap: 'EAP') -> None:
         # TODO: If our 'Last EAP ID' and 'This EAP ID' IDENTS always match, we may be able to get rid
         #       of EAP ID knowledge in the TLSClientStateMachine
         print(f"*** Last EAP ID: {eap_id}, EAP-LAST-ID: {self.eap_tls_last_id}")
@@ -182,7 +189,7 @@ class TLSClient:
             packets = self._rx_server_eap_tls(eap_id, eap_tls)
 
             if packets is None:
-                # Send the response (ACK the fragment)
+                # Send the response (ACK the fragment). Do not send if EAP Failure
                 self.auth_state_machine.send_response(eap_id, b'')
                 return
 
@@ -251,7 +258,7 @@ class TLSClient:
                 from tls_packet.auth.tls_record import TLSRecord
 
                 try:
-                    print(f"Reassembled packet: {self.eap_tls_server_data.hex}")
+                    print(f"Reassembled packet: {self.eap_tls_server_data.hex()}")
                     record_list = TLSRecord.parse(self.eap_tls_server_data, self.security_parameters)
 
                 except Exception as _e:

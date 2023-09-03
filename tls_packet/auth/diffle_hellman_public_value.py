@@ -64,7 +64,29 @@ class ClientDiffieHellmanPublic:
         raise NotImplementedError("TODO: Not yet supported")
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
-        raise NotImplementedError("TODO: Not yet implemented")
+        """
+        For all key exchange methods, the same algorithm is used to convert
+        the pre_master_secret into the master_secret.  The pre_master_secret
+        should be deleted from memory once the master_secret has been
+        computed.
+
+          master_secret = PRF(pre_master_secret, "master secret",
+                              ClientHello.random + ServerHello.random)
+                              [0..47];
+
+        The master secret is always exactly 48 bytes in length.  The length
+        of the premaster secret will vary depending on key exchange method.
+
+           A conventional Diffie-Hellman computation is performed.  The
+           negotiated key (Z) is used as the pre_master_secret, and is converted
+           into the master_secret, as specified above.  Leading bytes of Z that
+           contain all zero bits are stripped before it is used as the
+           pre_master_secret.
+
+           Note: Diffie-Hellman parameters are specified by the server and may
+           be either ephemeral or contained within the server's certificate.
+        """
+        return b''
 
 
 

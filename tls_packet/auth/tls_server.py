@@ -142,7 +142,7 @@ class TLSServer:
 
     # TODO:  Currently working on TLSClient to create a CLientHello insicde a TLSHandshake record.
 
-    def handle_tls_data(self, eap_id: int, eap_tls: 'EAP_TLS') -> None:
+    def handle_tls_data(self, eap_id: int, eap_tls: 'EAP_TLS', eap: 'EAP') -> None:
         # TODO: If our 'Last EAP ID' and 'This EAP ID' IDENTS always match, we may be able to get rid
         #       of EAP ID knowledge in the TLSClientStateMachine
         print(f"*** Last EAP ID: {eap_id}, EAP-LAST-ID: {self.eap_tls_last_id}")

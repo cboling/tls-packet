@@ -116,6 +116,8 @@ class TLSClientStateMachine(Machine):
 
         # Shutdown from any state shuts machine down
         {"trigger": "rx_alert", "source": "*", "dest": CLOSE, "unless": "inactive"},
+        {"trigger": "rx_eap_failure", "source": "*", "dest": CLOSE, "unless": "inactive"},
+        {"trigger": "close", "source": "*", "dest": CLOSE},
     ]
 
     def __init__(self, session: 'TLSClient'):
@@ -178,6 +180,9 @@ class TLSClientStateMachine(Machine):
     def using_certificate(self, *args, **kwargs) -> bool:
         print(f"TLSClientStateMachine: 'using_certificates' condition is currently hardcoded to 'True'")
         return True
+
+    def inactive(self) -> bool:
+        return self.state != self.CLOSE
 
     def on_enter_tls_start(self, *args, eap_id: Optional[int] = 256, **kwargs):
         """
@@ -305,16 +310,13 @@ class TLSClientStateMachine(Machine):
 
     def _client_key_exchange(self) -> 'TLSClientKeyExchange':
         from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange
-        from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange
-        from tls_packet.auth.tls_certificate import TLSCertificate
         # Look up what the server sent us
-        server_certificate= next((record for record in self.session.received_handshake_records
-                                  if isinstance(record, TLSCertificate)), None)
-        server_key_exchange = next((record for record in self.session.received_handshake_records
-                                    if isinstance(record, TLSServerKeyExchange)), None)
+        server_certificate= next((record.get_layer("TLSCertificate") for record in self.session.received_handshake_records
+                                  if record.has_layer("TLSCertificate")), None)
+        server_key_exchange = next((record.get_layer("TLSServerKeyExchange") for record in self.session.received_handshake_records
+                                    if record.has_layer("TLSServerKeyExchange")), None)
 
-
-        return TLSClientKeyExchange.create(server_key_exchange, server_certificate)
+        return TLSClientKeyExchange.create(self.session)
 
         public_key = self._session.public_key
         private_key = self._session.private_key
@@ -440,7 +442,7 @@ class TLSClientStateMachine(Machine):
         """
         print(f"{self.state}: entry")
         self._closed = True
-        raise NotImplementedError(f"{self.state}: TODO: Not yet implemented")
+        # TODO: Anything else?
 
     def build_state_graph(self, filename):
         """ Build a graph representation of the state machine """

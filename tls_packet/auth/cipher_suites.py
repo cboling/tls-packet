@@ -26,19 +26,28 @@ from tls_packet.auth.tls import TLS, TLSv1, TLSv1_1, TLSv1_2, TLSv1_3
 
 CipherSuiteDict = Type[Dict[str, Dict[str, Union[int, str]]]]
 
-SUPPORT_MINIMAL_CIPHER_SUITE = True     # Keep things simple until we start to work as expected with FreeRADIUS
+SUPPORT_MINIMAL_CIPHER_SUITE = False     # TODO: Keep things simple until we start to work as expected with FreeRADIUS
 
 if SUPPORT_MINIMAL_CIPHER_SUITE:
     CIPHER_SUITES = {
         'AES128-SHA256': {
-            'id':             60,
+            'id':             47,
             'version':        'TLSv1.2',
-            'tls_name':       'TLS_RSA_WITH_AES_128_CBC_SHA256',
+            'tls_name':       'TLS_RSA_WITH_AES_128_CBC_SHA',
             'key_exchange':   'RSA',
             'authentication': 'RSA',
             'bits':           128,
             'mac':            '',
-        }
+        },
+        'DHE-RSA-AES256-GCM-SHA384':     {
+            'id':             159,
+            'version':        'TLSv1.2',
+            'tls_name':       'TLS_DHE_RSA_WITH_AES_256_GCM_SHA384',
+            'key_exchange':   'DHE',
+            'authentication': 'RSA',
+            'bits':           256,
+            'mac':            'SHA1',
+        },
     }
 else:
     CIPHER_SUITES = {
@@ -488,7 +497,7 @@ class CipherSuite:
 
         In the absence of an application profile standard specifying
         otherwise, a TLS-compliant application MUST implement the cipher
-        suite TLS_RSA_WITH_AES_128_CBC_SHA (see RFC-5246 Appendix A.5 for the
+        suite TLS_RSA_WITH_AES_128_CBC_SHA (id 0x002f/47)(see RFC-5246 Appendix A.5 for the
         definition).
     """
     def __init__(self, tls_version, client_random, server_random, server_cert, cipher_suite):
