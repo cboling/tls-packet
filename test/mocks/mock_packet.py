@@ -17,8 +17,8 @@
 
 import struct
 
-from tls_packet.eap import EapCode, EapIdentity, EapMd5Challenge
-from tls_packet.eapol import EapolType, Eapol
+from tls_packet.auth.eap import EapCode, EapIdentity, EapMd5Challenge
+from tls_packet.auth.eapol import EapolType, Eapol
 
 FIXED_RANDOM = b"".join(struct.pack('B', index) for index in range(32))
 
