@@ -114,24 +114,24 @@ class EAP(Packet):
         except ValueError as e:
             raise DecodeError from e
 
-    def parse_eap_type(self, eap_type: EapType, frame: bytes, **kwargs) -> Packet:
-
+    @staticmethod
+    def parse_eap_type(eap_type: EapType, frame: bytes, *args, **kwargs) -> Packet:
         try:
             parser = {
-                EapCode.EAP_IDENTITY:           EapIdentity,
-                EapCode.EAP_LEGACY_NAK:         EapLegacyNak,
-                EapCode.EAP_MD5_CHALLENGE:      EapMd5Challenge,
-                EapCode.EAP_ONE_TIME_PASSWORD:  EapOneTimePasswprd,
-                EapCode.EAP_GENERIC_TOKEN_CARD: EapGenericTokenCard,
-                EapCode.EAP_TLS:                EapTls,
-                EapCode.EAP_TTLS:               EapTtls,
+                EapType.EAP_IDENTITY:           EapIdentity,
+                EapType.EAP_LEGACY_NAK:         EapLegacyNak,
+                EapType.EAP_MD5_CHALLENGE:      EapMd5Challenge,
+                EapType.EAP_ONE_TIME_PASSWORD:  EapOneTimePassword,
+                EapType.EAP_GENERIC_TOKEN_CARD: EapGenericTokenCard,
+                EapType.EAP_TLS:                EapTls,
+                EapType.EAP_TTLS:               EapTtls,
             }.get(eap_type)
 
             print(f"EAPOL:parse. Before Decompression: {frame.hex()}")
-            packet = frame_type.parse(frame, *args, eap_id=ident, lenght=length, **kwargs)
+            packet = parser.parse(frame, *args, **kwargs)
 
             if packet is None:
-                raise DecodeError(f"Failed to decode EAPOL: {frame_type}")
+                raise DecodeError(f"Failed to decode EAPOL: {parser}")
 
             return packet
 
@@ -149,9 +149,11 @@ class EAP(Packet):
 
 
 class EapRequest(EAP):
-    def __init__(self, eap_type: EapType, eap_type_data: Packet, **kwargs):
+    def __init__(self, eap_type_data: Union['EapPacket', PacketPayload], **kwargs):
         super().__init__(EapCode.EAP_REQUEST, **kwargs)
-        self._eap_type = EapType(eap_type)
+        self._eap_type = EapType(eap_type_data.eap_type)
+
+        # TODO: Treat next in future as a layer
         self._eap_type_data = eap_type_data
 
         raise NotImplementedError("Not yet implemented")
@@ -182,9 +184,11 @@ class EapRequest(EAP):
 
 
 class EapResponse(EAP):
-    def __init__(self, eap_type: EapType,eap_type_data: Packet, **kwargs):
+    def __init__(self, eap_type_data: Union['EapPacket', PacketPayload], **kwargs):
         super().__init__(EapCode.EAP_RESPONSE, **kwargs)
-        self._eap_type = EapType(eap_type)
+        self._eap_type = EapType(eap_type_data.eap_type)
+
+        # TODO: Treat next in future as a layer
         self._eap_type_data = eap_type_data
 
     def pack(self, **argv) -> bytes:
@@ -261,7 +265,38 @@ class EapFinish(EAP):
     def parse(frame: bytes, *args, **kwargs) -> 'EapFinish':
         raise NotImplementedError("Not yet implemented")
 
-class EapIdentity(Packet):
+
+class EapPacket(Packet):
+    _eap_type = None
+
+    @property
+    def eap_type(self) -> EapType:
+        return self._eap_type
+
+
+class EapIdentity(EapPacket):
+    _eap_type = EapType.EAP_IDENTITY
+
+    def __init__(self, type_data: bytes, **kwargs):
+        super().__init__(**kwargs)
+        self._type_data = type_data
+
+    def pack(self, **argv) -> bytes:
+        raise NotImplementedError("Not yet implemented")
+
+    @staticmethod
+    def parse(frame: bytes, *args, length: Optional[int] = None, **kwargs) -> 'EapIdentity':
+
+        if len(frame) < length:
+            raise DecodeError(f"EapIdentity: message truncated: Expected at least {length} bytes, got: {len(frame)}")
+
+        type_data = frame[:length]
+        return EapIdentity(type_data, length=length, **kwargs)
+
+
+class EapLegacyNak(EapPacket):
+    _eap_type = EapType.EAP_LEGACY_NAK
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         raise NotImplementedError("Not yet implemented")
@@ -270,11 +305,37 @@ class EapIdentity(Packet):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapIdentity':
+    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapLegacyNak':
         raise NotImplementedError("Not yet implemented")
 
 
-class EapLegacyNak(Packet):
+class EapMd5Challenge(EapPacket):
+    _eap_type = EapType.EAP_MD5_CHALLENGE
+
+    def __init__(self, challenge, extra_data, **kwargs):
+        super().__init__(**kwargs)
+        self._challenge = challenge
+        self._extra_data = extra_data
+
+    @property
+    def challenge(self):
+        return self._challenge
+
+    @property
+    def extra_data(self):
+        return self._extra_data
+
+    def pack(self, **argv) -> bytes:
+        raise NotImplementedError("Not yet implemented")
+
+    @staticmethod
+    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapMd5Challenge':
+        raise NotImplementedError("Not yet implemented")
+
+
+class EapOneTimePassword(EapPacket):
+    _eap_type = EapType.EAP_ONE_TIME_PASSWORD
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         raise NotImplementedError("Not yet implemented")
@@ -283,11 +344,13 @@ class EapLegacyNak(Packet):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapLegacyNak':
+    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapOneTimePassword':
         raise NotImplementedError("Not yet implemented")
 
 
-class EapMd5Challenge(Packet):
+class EapGenericTokenCard(EapPacket):
+    _eap_type = EapType.EAP_GENERIC_TOKEN_CARD
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         raise NotImplementedError("Not yet implemented")
@@ -296,11 +359,13 @@ class EapMd5Challenge(Packet):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapMd5Challenge':
+    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapGenericTokenCard':
         raise NotImplementedError("Not yet implemented")
 
 
-class EapOneTimePassword(Packet):
+class EapTls(EapPacket):
+    _eap_type = EapType.EAP_TLS
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         raise NotImplementedError("Not yet implemented")
@@ -309,11 +374,13 @@ class EapOneTimePassword(Packet):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapOneTimePassword':
+    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapTls':
         raise NotImplementedError("Not yet implemented")
 
 
-class EapGenericTokenCard(Packet):
+class EapTtls(EapPacket):
+    _eap_type = EapType.EAP_TTLS
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         raise NotImplementedError("Not yet implemented")
@@ -322,31 +389,5 @@ class EapGenericTokenCard(Packet):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapGenericTokenCard':
-        raise NotImplementedError("Not yet implemented")
-
-
-class EapTls(Packet):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        raise NotImplementedError("Not yet implemented")
-
-    def pack(self, **argv) -> bytes:
-        raise NotImplementedError("Not yet implemented")
-
-    @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapTls':
-        raise NotImplementedError("Not yet implemented")
-
-
-class EapTtls(Packet):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        raise NotImplementedError("Not yet implemented")
-
-    def pack(self, **argv) -> bytes:
-        raise NotImplementedError("Not yet implemented")
-
-    @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapTtls':
+    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapTtls':
         raise NotImplementedError("Not yet implemented")

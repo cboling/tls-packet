@@ -21,6 +21,7 @@ import unittest
 
 from mocks.mock_packet import FIXED_RANDOM
 from mocks.util import assertGeneratedFrameEquals
+from mocks.mock_auth_socket import MockAuthSocket
 from tls_packet.auth.cipher_suites import get_cipher_suites_by_version
 from tls_packet.auth.tls import TLS, TLSv1_0, TLSv1_1, TLSv1_2, TLSv1_3
 from tls_packet.auth.tls_client import TLSClient
@@ -31,6 +32,15 @@ from tls_packet.auth.tls_handshake import TLSHandshake
 
 # noinspection PyInterpreter
 class TestTLSClientHello(unittest.TestCase):
+    @classmethod
+    def setUp(cls):
+        cls.client = TLSClient(MockAuthSocket(),
+                               tls_version=TLSv1_2(),
+                               ciphers=None,
+                               random_data=FIXED_RANDOM,
+                               extensions=None,
+                               debug=True)
+
     @staticmethod
     def _client_hello_payload(version: TLS) -> str:
         all = get_cipher_suites_by_version(TLSv1_2(), excluded=("PSK", ))
@@ -64,7 +74,7 @@ class TestTLSClientHello(unittest.TestCase):
         supported = (TLSv1_2(),)         # TODO: Get TLSv1_0 working
         for version in supported:
             print(f"Version: {version}", file=sys.stderr)
-            client = TLSClient(tls_version=version, random_data=FIXED_RANDOM)
+            client = TLSClient(MockAuthSocket(), tls_version=version, random_data=FIXED_RANDOM)
 
             # Construct expected frame
             hello_payload = self._client_hello_payload(version)
@@ -81,21 +91,25 @@ class TestTLSClientHello(unittest.TestCase):
             self.assertIsNotNone(hello.client)
             self.assertEqual(hello.client, hello.session)
 
+            # Can use repr and/or str on the object
+            self.assertNotEqual(repr(hello), "")
+            self.assertNotEqual(str(hello), "")
+
     def test_TLSClientHello_serialization_unsupported_versions(self):
         unsupported = (TLSv1_0(), TLSv1_1(), TLSv1_3())
         for version in unsupported:
             print(f"Version: {version}", file=sys.stderr)
             with self.assertRaises(NotImplementedError):
-                client = TLSClient(tls_version=version, random_data=FIXED_RANDOM)
+                client = TLSClient(MockAuthSocket(), tls_version=version, random_data=FIXED_RANDOM)
                 TLSClientHello(client, random_data=FIXED_RANDOM)
 
     def test_TLSClientHello_serialization_invalid_random(self):
-        client = TLSClient(random_data=FIXED_RANDOM)
+        client = TLSClient(MockAuthSocket(), random_data=FIXED_RANDOM)
         with self.assertRaises(ValueError):
             TLSClientHello(client, random_data=os.urandom(8))  # too small
 
     def test_TLSClientHello_serialization_bad_session_id(self):
-        client = TLSClient(random_data=FIXED_RANDOM)
+        client = TLSClient(MockAuthSocket(), random_data=FIXED_RANDOM)
 
         with self.assertRaises(ValueError):
             TLSClientHello(client, random_data=FIXED_RANDOM, session_id=-1)
@@ -106,7 +120,7 @@ class TestTLSClientHello(unittest.TestCase):
                 TLSClientHello(client, random_data=FIXED_RANDOM, session_id=session_id)
 
     def test_TLSClientHello_serialization_extensions_not_supported(self):
-        client = TLSClient(random_data=FIXED_RANDOM)
+        client = TLSClient(MockAuthSocket(), random_data=FIXED_RANDOM)
 
         with self.assertRaises(NotImplementedError):
             extensions = [HelloExtension(header=6, data=b'')]

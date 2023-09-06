@@ -21,6 +21,8 @@ from mocks.util import assertGeneratedFrameEquals
 from tls_packet.packet import DecodeError
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.auth.tls_hello import TLSHelloRequest
+from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordContentType
+from tls_packet.auth.security_params import SecurityParameters
 
 
 class TestTLSHandshake(unittest.TestCase):
@@ -63,22 +65,6 @@ class TestTLSHandshake(unittest.TestCase):
                             TLSHandshakeType.KEY_UPDATE,
                             TLSHandshakeType.MESSAGE_HASH):
             self.assertTrue(0 <= enumeration.value <= 255)
-
-
-class TestTLSHello(unittest.TestCase):
-    def test_TLSHelloFrameSerialize(self):
-        expected = "00"
-        hello = TLSHelloRequest()
-        assertGeneratedFrameEquals(self, hello.pack(), expected)
-
-    def test_TLSHelloFrameDecode(self):
-        # Construct frame
-        hello_frame = "00"
-
-        hello = TLSHandshake.parse(bytes.fromhex(hello_frame))
-
-        self.assertIsNotNone(hello)
-        self.assertIsInstance(hello, TLSHelloRequest)
 
 
 if __name__ == '__main__':

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class TLSClient:
     """ TLS Client """
 
-    def __init__(self, auth_state_machine,
+    def __init__(self, auth_socket,
                  tls_version: Optional[TLS] = None,
                  session_id: Optional[int] = 0,
                  ciphers: Optional[CipherSuiteDict] = None,
@@ -43,7 +43,7 @@ class TLSClient:
                  keys: Optional[Dict[str, Any]] = None,
                  debug: Optional[bool] = False):
 
-        self.auth_state_machine = auth_state_machine
+        self.auth_socket = auth_socket
 
         self._tls_version = tls_version or TLSv1_2()
         # TODO: See what we can get rid of...
@@ -136,7 +136,7 @@ class TLSClient:
         if sm is not None:
             sm.close()
 
-        self.auth_state_machine = None
+        self.auth_socket = None
 
     def read(self, frame: bytes) -> Tuple[bytes, bytes, bytes]:
         record_layer, frame = frame[:5], frame[5:]
@@ -167,7 +167,7 @@ class TLSClient:
 
         elif eap_id == self._eap_tls_last_sent_id and self._eap_tls_last_sent_data is not None:
             # Handle a retransmit
-            self.auth_state_machine.send_response(eap_id, self._eap_tls_last_sent_data)
+            self.auth_socket.send_response(eap_id, self._eap_tls_last_sent_data)
 
         else:
             """
@@ -190,7 +190,7 @@ class TLSClient:
 
             if packets is None:
                 # Send the response (ACK the fragment). Do not send if EAP Failure
-                self.auth_state_machine.send_response(eap_id, b'')
+                self.auth_socket.send_response(eap_id, b'')
                 return
 
             # Save single records into a list so we can easily do a for-loop
@@ -272,7 +272,7 @@ class TLSClient:
         print(f"*** This EAP ID: {eap_id}, EAP-LAST-ID: {self.eap_tls_last_id}")
         self._eap_tls_last_sent_id = eap_id
         self._eap_tls_last_sent_data = data
-        self.auth_state_machine.send_response(eap_id, data, *args, **kwargs)
+        self.auth_socket.send_response(eap_id, data, *args, **kwargs)
 
     def save_client_record(self, record: Union["TLSRecord", List["TLSRecord"]]) -> None:
         """ Save off client records so that TLSFinish can be correctly created """

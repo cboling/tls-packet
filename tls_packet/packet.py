@@ -63,7 +63,7 @@ class Packet:
 
         # Order list of encapsulated layer that have been decoded
         layers: List['Packet'] = layers or []
-        self._layers = [pkt for  pkt in layers]
+        self._layers = [pkt for pkt in layers]
 
     def __repr__(self):
         sublayers = f"[{len(self._layers)}: {repr(self._layers)}]"

@@ -17,8 +17,8 @@
 
 import struct
 
-from tls_packet.auth.eap import EapCode, EapIdentity, EapMd5Challenge
-from tls_packet.auth.eapol import EapolType, Eapol
+from tls_packet.auth.eap import EapResponse, EapCode, EapType, EapIdentity, EapMd5Challenge
+from tls_packet.auth.eapol import EAPOLPacketType, EapolStart, EapolLogoff, EapolEAP
 
 FIXED_RANDOM = b"".join(struct.pack('B', index) for index in range(32))
 
@@ -34,17 +34,36 @@ class MockPacket:
         if packet_id:
             self.message_id = packet_id
 
-        if packet_type == PacketType.EAPOL_START:
+        if packet_type == EAPOLPacketType.EAPOL_START:
             if valid:
-                return Eapol(1, EapolType.EAPOL_START.value, b"")
-            return Eapol(1, 999, b"")
+                return EapolStart()
+            return EapolStart(version=99)
 
-        elif packet_type == PacketType.EAP_IDENT_RESPONSE:
+        elif packet_type == EAPOLPacketType.EAPOL_LOGOFF:
             if valid:
-                return EapIdentity(EapCode.RESPONSE.value, self.message_id, self.identity)
-            return EapIdentity(EapCode.RESPONSE.value, 999, self.identity)
+                return EapolLogoff()
+            return EapolLogoff(version=99)
 
-        elif packet_type == PacketType.EAP_AUTH_RESPONSE:
+        elif packet_type == EapType.EAP_IDENTITY:
+            identity = EapIdentity(self.identity)
+
             if valid:
-                return EapMd5Challenge(EapCode.RESPONSE.value, self.message_id, self.challenge)
-            return EapMd5Challenge(EapCode.RESPONSE.value, 999, self.challenge)
+                auth_response = EapResponse(identity, eap_id=self.message_id)
+            else:
+                auth_response = EapResponse(identity, eap_id=999)
+
+            # TODO: Next breaks the packet layering. Find way to do add layer
+            packet = EapolEAP(eap=auth_response)
+            return packet
+
+        elif packet_type == EapType.EAP_MD5_CHALLENGE:
+            challenge = EapMd5Challenge(self.message_id, self.challenge)
+
+            if valid:
+                auth_response = EapResponse(challenge, eap_id=self.message_id)
+            else:
+                auth_response = EapResponse(challenge, eap_id=999)
+
+            # TODO: Next breaks the packet layering. Find way to do add layer
+            packet = EapolEAP(eap=auth_response)
+            return packet

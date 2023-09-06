@@ -38,7 +38,7 @@ class TLSClientStateMachine(Machine):
                            Send ClientHello |        | Recv HelloRetryRequest
                       [K_send = early data] |        |
                                             v        |
-                       /                 WAIT_SH ----+
+                       =                 WAIT_SH ----+
                        |                    | Recv ServerHello
                        |                    | K_recv = handshake
                    Can |                    V
@@ -57,7 +57,7 @@ class TLSClientStateMachine(Machine):
                        |           |                 | Recv CertificateVerify
                        |           +> WAIT_FINISHED <+
                        |                  | Recv Finished
-                       \                  | [Send EndOfEarlyData]
+                       =                  | [Send EndOfEarlyData]
                                           | K_send = handshake
                                           | [Send Certificate [+ CertificateVerify]]
                 Can send                  | Send Finished

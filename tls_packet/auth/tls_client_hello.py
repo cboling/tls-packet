@@ -77,8 +77,7 @@ class TLSClientHello(TLSHandshake):
       } ClientHello;
     """
     from tls_packet.auth.tls_client import TLSClient
-
-    def __init__(self, state_machine: 'TLSClientStateMachine',
+    def __init__(self, session: 'TLSClient',
                  length: Optional[int] = None,  # For decode only
                  version: Optional[TLS] = None,
                  random_data: Optional[bytes] = None,
@@ -89,12 +88,12 @@ class TLSClientHello(TLSHandshake):
                  extensions: Optional[Iterable[HelloExtension]] = None, **kwargs):
         super().__init__(TLSHandshakeType.CLIENT_HELLO,
                          length=length,
-                         session=state_machine.session, **kwargs)
+                         session=session, **kwargs)
 
-        self.version = version or int(state_machine.session.tls_version)
+        self.version = version or int(session.tls_version)
         self.random_bytes = random_data or os.urandom(32)
         self.session_id = session_id
-        self.ciphers = ciphers or state_machine.session.ciphers
+        self.ciphers = ciphers or session.ciphers
         self.compression = tuple(compression)
         self.gmt_unix_time = gmt_time or int(time.time())
         self.extensions = extensions or []

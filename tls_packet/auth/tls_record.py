@@ -274,7 +274,7 @@ class TLSHandshakeRecord(TLSRecord):
 
         tls_version = TLS.get_by_code(frame[1:3])
         if tls_version is None:
-            raise DecodeError(f"TLSHandshakeRecord: unrecognized TLS version '{frame[1:3]:#04x}'")
+            raise DecodeError(f"TLSHandshakeRecord: unrecognized TLS version '{frame[1:3].hex()}'")
 
         msg_len = struct.unpack_from("!H", frame, 3)[0]
         if msg_len > len(frame) - 5:

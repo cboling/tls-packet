@@ -20,6 +20,7 @@ from enum import IntEnum
 from typing import Union, Optional, List, Any
 
 from tls_packet.packet import Packet, PacketPayload, DecodeError, PARSE_ALL
+from tls_packet.auth.eap import EAP
 
 
 class EAPOLPacketType(IntEnum):
@@ -134,9 +135,10 @@ class EapolEAP(EAPOL):
     The Packet Body of each EAPOL PDU with a Packet Type of EAPOL-EAP encapsulates exactly one EAP
     packet
     """
-    def __init__(self, **kwargs):
+    def __init__(self, eap: Optional[Union[EAP, PacketPayload]] = None, **kwargs):
         super().__init__(EAPOLPacketType.EAPOL_EAP, **kwargs)
-        raise NotImplementedError("Not yet implemented")
+        # TODO: Treat next in future as a layer
+        self.m_eap = eap
 
     def pack(self, **argv) -> bytes:
         raise NotImplementedError("Not yet implemented")
@@ -152,15 +154,21 @@ class EapolEAP(EAPOL):
         if msg_type != EAPOLPacketType.EAPOL_EAP:
             raise DecodeError(f"EapolEAP: Message type is not EAPOL_EAP. Found: {msg_type}")
 
-        if version >= 3:
-            # Payload
-            offset = 4
-            code, identifier, eap_length = struct.unpack_from("!BBH", frame, offset)
-            offset += 4
-            # TODO: Tie this into the EAP class if it is needed
-            raise NotImplementedError("TODO: not yet implemented")
+        offset = 4
+        required = offset + length
 
-        return EapolEAP(version=version, **kwargs)
+        if len(frame) < required:
+            raise DecodeError(f"EapolEAP: message EAP payload truncated: Expected at least {required} bytes, got: {len(frame)}")
+
+        payload_data = frame[offset:required]
+        if max_depth > 0:
+            # Parse the handshake message
+            payload = EAP.parse(payload_data, *args, max_depth=max_depth-1, **kwargs)
+        else:
+            # Save it as blob data (note that we use the decompressed data)
+            payload = PacketPayload(payload_data, *args, **kwargs)
+
+        return EapolEAP(eap=payload, version=version, **kwargs)
 
 
 class EapolStart(EAPOL):

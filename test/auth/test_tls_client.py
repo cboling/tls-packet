@@ -18,6 +18,7 @@
 import unittest
 
 from mocks.mock_packet import FIXED_RANDOM
+from mocks.mock_auth_socket import MockAuthSocket
 from tls_packet.auth.cipher_suites import get_cipher_suites_by_version
 from tls_packet.auth.tls import TLSv1_0, TLSv1_1, TLSv1_2
 from tls_packet.auth.tls_client import TLSClient
@@ -26,22 +27,26 @@ from tls_packet.auth.tls_client import TLSClient
 class TestTLSClient(unittest.TestCase):
     @classmethod
     def setUp(cls):
-        cls.client_v10 = TLSClient(tls_version=TLSv1_0(),
+        cls.client_v10 = TLSClient(MockAuthSocket(),
+                                   tls_version=TLSv1_0(),
                                    ciphers=None,
                                    random_data=FIXED_RANDOM,
                                    extensions=None,
                                    debug=True)
-        cls.client_v11 = TLSClient(tls_version=TLSv1_1(),
+        cls.client_v11 = TLSClient(MockAuthSocket(),
+                                   tls_version=TLSv1_1(),
                                    ciphers=None,
                                    random_data=FIXED_RANDOM,
                                    extensions=None,
                                    debug=True)
-        cls.client_v12 = TLSClient(tls_version=TLSv1_2(),
+        cls.client_v12 = TLSClient(MockAuthSocket(),
+                                   tls_version=TLSv1_2(),
                                    ciphers=None,
                                    random_data=FIXED_RANDOM,
                                    extensions=None,
                                    debug=True)
-        # cls.client_v13 = TLSClient(tls_version=TLSv1_3(),
+        # cls.client_v13 = TLSClient(MockAuthSocket(),
+        #                            tls_version=TLSv1_3(),
         #                            ciphers=None,
         #                            random_data=FIXED_RANDOM,
         #                            extensions=None,
@@ -52,8 +57,8 @@ class TestTLSClient(unittest.TestCase):
         for client in (self.client_v10, self.client_v11, self.client_v12):
             self.assertEqual(client.client_sequence_number, 0)
             self.assertEqual(client.server_sequence_number, 0)
-            self.assertEqual(client.client_random, FIXED_RANDOM)
-            self.assertIsNone(client.server_random)
+            self.assertEqual(client.security_parameters.client_random, FIXED_RANDOM)
+            self.assertIsNone(client.security_parameters.server_random)
 
             ciphers = get_cipher_suites_by_version(client.tls_version, excluded=("PSK", ))
             self.assertNotEqual(len(ciphers), 0)

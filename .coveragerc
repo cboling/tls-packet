@@ -1,6 +1,6 @@
 [run]
 branch = True
-omit = venv*/*, test/*, examples/*
+omit = venv*/*, test/*, docs/*
 parallel = True
 
 [report]
