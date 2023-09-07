@@ -51,12 +51,12 @@ class TLSRecord(Packet):
         ... type specific data here
     """
 
-    def __init__(self, content_type: TLSRecordContentType, next_layer: 'Packet',
+    def __init__(self, content_type: TLSRecordContentType, next_layer: Union['Packet', None],
                  tls_version: Optional[TLS] = None,
                  length: Optional[Union[int, None]] = None,
                  session=None, **kwargs):
 
-        super().__init__(layers=(next_layer,), **kwargs)
+        super().__init__(layers=(next_layer,) if next_layer else tuple(), **kwargs)
         self._session = session
         self._content_type = content_type
         self._msg_length = length
@@ -69,11 +69,7 @@ class TLSRecord(Packet):
         # that they recognize as being "good" TLS. Quite a bit of software rejects version numbers that are
         # higher than what they know is "good", which would have blocked TLS 1.3 traffic if TLS 1.3 had used the logical
         # version numbers.
-
         self._version = tls_version or TLSv1_0()
-
-        if self._version is None:
-            raise ValueError("TLSRecord: TLS Version not specified. Must be specified or provided by associated client/server session")
 
     def __repr__(self):
         return f"{self.__class__.__qualname__}: Type: {self._content_type}, Len: {self._msg_length}"
@@ -84,6 +80,7 @@ class TLSRecord(Packet):
 
     @property
     def session(self) -> Union['TLSClient', 'TLSServer']:
+        # TODO: Get rid of stored sessions for auth objects
         return self._session
 
     @property
@@ -223,8 +220,12 @@ class TLSRecord(Packet):
 
 class TLSChangeCipherSpecRecord(TLSRecord):
     def __init__(self, data, **kwargs):
-        super().__init__(TLSRecordContentType.CHANGE_CIPHER_SPEC, **kwargs)
-        raise NotImplementedError("Not yet implemented")
+        super().__init__(TLSRecordContentType.CHANGE_CIPHER_SPEC, None, **kwargs)
+        self._data = data
+
+    @property
+    def data(self) -> bytes:
+        return self._data
 
     def pack(self, **argv) -> bytes:
         raise NotImplementedError("Not yet implemented")

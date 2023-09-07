@@ -41,6 +41,10 @@ class ECCurveType(IntEnum):
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
 
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
+
 
 class NamedCurve(IntEnum):
     """
@@ -69,6 +73,10 @@ class NamedCurve(IntEnum):
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
+
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
 
 
 class TLSServerKeyExchange(TLSHandshake):
@@ -230,6 +238,22 @@ class TLSServerKeyExchange(TLSHandshake):
         self._named_curve = named_curve
         self._public_key = public_key
         self._signature = signature
+
+    @property
+    def curve_type(self) -> ECCurveType:
+        return self._curve_type
+
+    @property
+    def named_curve(self) -> NamedCurve:
+        return self._named_curve
+
+    @property
+    def public_key(self) -> bytes:
+        return self._public_key
+
+    @property
+    def signature(self) -> bytes:
+        return self._signature
 
     @staticmethod
     def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:

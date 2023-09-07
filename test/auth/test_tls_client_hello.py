@@ -19,9 +19,10 @@ import os
 import sys
 import unittest
 
+from mocks.mock_auth_socket import MockAuthSocket
 from mocks.mock_packet import FIXED_RANDOM
 from mocks.util import assertGeneratedFrameEquals
-from mocks.mock_auth_socket import MockAuthSocket
+
 from tls_packet.auth.cipher_suites import get_cipher_suites_by_version
 from tls_packet.auth.tls import TLS, TLSv1_0, TLSv1_1, TLSv1_2, TLSv1_3
 from tls_packet.auth.tls_client import TLSClient
@@ -123,12 +124,14 @@ class TestTLSClientHello(unittest.TestCase):
         client = TLSClient(MockAuthSocket(), random_data=FIXED_RANDOM)
 
         with self.assertRaises(NotImplementedError):
+            # TODO: Not yet supported
             extensions = [HelloExtension(header=6, data=b'')]
             TLSClientHello(client, random_data=FIXED_RANDOM, extensions=extensions)
 
     def test_TLSClientHello_decode(self):
         # Currently we act only as a client
         with self.assertRaises(NotImplementedError):
+            # TODO: Not yet supported
             frame = "01000004010303"  # Enough to throw an exception
             TLSHandshake.parse(bytes.fromhex(frame))
 

@@ -1,3 +1,20 @@
+# -------------------------------------------------------------------------
+# Copyright 2023-2023, Boling Consulting Solutions, bcsw.net
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License
+# -------------------------------------------------------------------------
+
+import struct
 from typing import Union, Optional
 
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
@@ -51,15 +68,20 @@ class TLSCertificateVerify(TLSHandshake):
         are to be used with DSA.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, signature: Optional[bytes] = None, *args, **kwargs):
         super().__init__(TLSHandshakeType.CERTIFICATE_VERIFY, *args, **kwargs)
+        self._signature = signature
+
+    @property
+    def signature(self) -> bytes:
+        return self._signature
 
     @staticmethod
     def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSCertificateRequest """
 
-        # type(1) + length(3) + cert-count(1) + certs(0..n) + DSN len (1) + dsn (0..n)
-        required = 1 + 3 + 1 + 1
+        # type(1) + length(3) + sig_len(2)
+        required = 1 + 3 + 2
         frame_len = len(frame)
 
         if frame_len < required:
@@ -70,9 +92,17 @@ class TLSCertificateVerify(TLSHandshake):
             raise DecodeError(f"TLSCertificateRequest: Message type is not CERTIFICATE_VERIFY. Found: {msg_type}")
 
         msg_len = int.from_bytes(frame[1:4], 'big')
-        frame = frame[:msg_len + 4]  # Restrict the frame to only these bytes
+        sig_len = int.from_bytes(frame[4:6], 'big')
 
-        return TLSCertificateVerify(*args, length=msg_len, original_frame=frame, **kwargs)
+        sig_frame = frame[6:]
+        if len(sig_frame) < sig_len:
+            raise DecodeError(f"TLSCertificateRequest: message sinature truncated: Expected at least {sig_len} bytes, got: {len(sig_frame)}")
+
+        return TLSCertificateVerify(*args, signature=sig_frame, original_frame=frame, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
-        raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
+        # sig_len = struct.pack("!H", len(self._signature))
+        sig_len = struct.pack("!H", len(self._signature))
+        sig_buffer = sig_len + self._signature
+
+        return super().pack(payload=sig_buffer)

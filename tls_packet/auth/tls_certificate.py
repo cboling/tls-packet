@@ -15,7 +15,7 @@
 # -------------------------------------------------------------------------
 
 import struct
-from typing import Union, Optional, List, Tuple
+from typing import Union, Optional, List, Tuple, Iterable
 
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import DecodeError, PARSE_ALL
@@ -189,9 +189,9 @@ class ASN_1_CertList:
     """
     header_size = 3
 
-    def __init__(self, certificates: List['ASN_1_Cert']):
+    def __init__(self, certificates: Iterable['ASN_1_Cert']):
         # Error checks
-        self._certificates = certificates
+        self._certificates = list(certificates)
 
     @property
     def length(self) -> int:
@@ -269,9 +269,7 @@ class TLSCertificate(TLSHandshake):
         0x3082...C0F3: first certificate (ASN.1 encoded)
         0x00046D: certificate #2 length=1133
         0x3080...4998: second certificate (ASN.1 encoded)
-
     """
-
     def __init__(self, certificates: ASN_1_CertList, *args, **kwargs):
         super().__init__(TLSHandshakeType.CERTIFICATE, *args, **kwargs)
 

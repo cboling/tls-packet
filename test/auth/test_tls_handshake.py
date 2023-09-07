@@ -17,12 +17,8 @@
 
 import unittest
 
-from mocks.util import assertGeneratedFrameEquals
-from tls_packet.packet import DecodeError
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
-from tls_packet.auth.tls_hello import TLSHelloRequest
-from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordContentType
-from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.packet import DecodeError
 
 
 class TestTLSHandshake(unittest.TestCase):
@@ -39,7 +35,8 @@ class TestTLSHandshake(unittest.TestCase):
 
     def test_TLSHandshakeFrameMessageTypes(self):
         # Change underscores to spaces
-        for code in (0, 1, 2, 3, 4, 6, 8, 11, 12, 13, 14, 15, 16, 20, 21, 22, 23, 24, 254):
+        valid_codes = {0, 1, 2, 3, 4, 6, 8, 11, 12, 13, 14, 15, 16, 20, 21, 22, 23, 24, 254}
+        for code in valid_codes:
             self.assertTrue(TLSHandshakeType.has_value(code))
 
             name = TLSHandshakeType(code).name()
@@ -65,6 +62,11 @@ class TestTLSHandshake(unittest.TestCase):
                             TLSHandshakeType.KEY_UPDATE,
                             TLSHandshakeType.MESSAGE_HASH):
             self.assertTrue(0 <= enumeration.value <= 255)
+
+        for code in range(0, 256):
+            if code not in valid_codes:
+                with self.assertRaises(ValueError):
+                    _ = TLSHandshakeType(code)
 
 
 if __name__ == '__main__':

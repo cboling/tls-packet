@@ -15,7 +15,7 @@
 # -------------------------------------------------------------------------
 
 from enum import IntEnum
-from typing import Union, Optional, List
+from typing import Union, Optional, Iterable, Tuple
 
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import DecodeError, PARSE_ALL
@@ -133,11 +133,19 @@ class TLSCertificateRequest(TLSHandshake):
           unless there is some external arrangement to the contrary.
     """
 
-    def __init__(self, certificate_types: List[CertificateType], dsn: bytes, *args, **kwargs):
+    def __init__(self, certificate_types: Iterable[CertificateType], dsn: bytes, *args, **kwargs):
         super().__init__(TLSHandshakeType.CERTIFICATE_REQUEST, *args, **kwargs)
 
-        self._certificate_types = certificate_types
+        self._certificate_types = tuple(certificate_types)
         self._dsn = dsn
+
+    @property
+    def certificate_types(self) -> Tuple[CertificateType]:
+        return self._certificate_types
+
+    @property
+    def dsn(self) -> bytes:
+        return b"" + self._dsn if self._dsn else b""
 
     @staticmethod
     def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
@@ -164,11 +172,14 @@ class TLSCertificateRequest(TLSHandshake):
 
         certificate_types = []
         for index in range(cert_type_count):
-            certificate_types.append(CertificateType(frame[offset + index]))
-        offset += cert_type_count
+            try:
+                certificate_types.append(CertificateType(frame[offset + index]))
 
+            except ValueError as e:
+                raise DecodeError(f"TLSCertificateRequest: Invalid Certificate Type: {frame[offset + index]}") from e
+
+        offset += cert_type_count
         dns_length = frame[offset]
-        offset += 1
 
         if offset + dns_length > len(frame):
             raise DecodeError("TLSServerKeyExchange: message truncated. Unable to extract Distinguished Names")

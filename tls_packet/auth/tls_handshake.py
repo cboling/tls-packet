@@ -173,6 +173,7 @@ class TLSHandshake(Packet):
             from tls_packet.auth.tls_certificate import TLSCertificate
             from tls_packet.auth.tls_certificate_request import TLSCertificateRequest
             from tls_packet.auth.tls_certificate_verify import TLSCertificateVerify
+            from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange
 
             msg_type = TLSHandshakeType(frame[0])
             msg_class = {
@@ -188,7 +189,7 @@ class TLSHandshake(Packet):
                 TLSHandshakeType.CERTIFICATE_REQUEST: TLSCertificateRequest,
                 TLSHandshakeType.SERVER_HELLO_DONE:   TLSServerHelloDone,
                 TLSHandshakeType.CERTIFICATE_VERIFY:  TLSCertificateVerify,
-                # TLSHandshakeType.CLIENT_KEY_EXCHANGE:  TLS,
+                TLSHandshakeType.CLIENT_KEY_EXCHANGE: TLSClientKeyExchange,
                 # TLSHandshakeType.FINISHED:             TLSFinish,
                 # TLSHandshakeType.CERTIFICATE_URL:      TLS,
                 # TLSHandshakeType.CERTIFICATE_STATUS:   TLS,

@@ -14,7 +14,6 @@
 # limitations under the License
 # -------------------------------------------------------------------------
 
-import struct
 from enum import IntEnum
 from typing import Union, Optional
 
@@ -37,6 +36,10 @@ class TLSClientKeyEncoding(IntEnum):
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
+
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
 
 
 class TLSClientKeyExchange(TLSHandshake):
@@ -77,19 +80,27 @@ class TLSClientKeyExchange(TLSHandshake):
 
     """
     def __init__(self, *args,
-                 key: Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, None] = None, **kwargs):
+                 key: Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, bytes] = None, **kwargs):
         super().__init__(TLSHandshakeType.CLIENT_KEY_EXCHANGE, *args, **kwargs)
 
-        if key is None:
-            self.encoding = TLSClientKeyEncoding.UNKNOWN
+        if key is None or isinstance(key, bytes):
+            self._encoding = TLSClientKeyEncoding.UNKNOWN
         elif isinstance(key, RSAPreMasterSecret):
-            self.encoding = TLSClientKeyEncoding.RSA_PREMASTER_SECRET
+            self._encoding = TLSClientKeyEncoding.RSA_PREMASTER_SECRET
         elif isinstance(key, ClientDiffieHellmanPublic):
-            self.encoding = TLSClientKeyEncoding.CLIENT_DIFFIE_HELLMAN_PUBLIC
+            self._encoding = TLSClientKeyEncoding.CLIENT_DIFFIE_HELLMAN_PUBLIC
         else:
             raise ValueError(f"Unknown/Unsupported Client Exchange Key Type: '{type(key)}'")
 
         self._key = key
+
+    @property
+    def encoding(self) -> TLSClientKeyEncoding:
+        return self._encoding
+
+    @property
+    def key(self) -> Union[RSAPreMasterSecret, ClientDiffieHellmanPublic]:
+        return self._key
 
     @staticmethod
     def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
@@ -97,10 +108,7 @@ class TLSClientKeyExchange(TLSHandshake):
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         key_buffer = bytes(self._key)
-        key_len = struct.pack("!I", len(key_buffer))  # We only want 24-bits
-        buffer = key_len[1:] + key_buffer
-
-        return super().pack(payload=buffer)
+        return super().pack(payload=key_buffer)
 
     @staticmethod
     def create(session: 'TLSClient') -> 'TLSClientKeyExchange':

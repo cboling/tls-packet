@@ -17,9 +17,11 @@
 
 import unittest
 
-from tls_packet.packet import DecodeError
-from tls_packet.auth.tls_record import TLSRecordContentType, TLSRecord
+from mocks.util import assertGeneratedFrameEquals
+
 from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.auth.tls_record import TLSRecordContentType, TLSRecord, TLSChangeCipherSpecRecord
+from tls_packet.packet import DecodeError
 
 
 class TestTLSRecord(unittest.TestCase):
@@ -29,7 +31,8 @@ class TestTLSRecord(unittest.TestCase):
 
     def test_TLSRecordContentTypes(self):
         # Change underscores to spaces
-        for code in (20, 21, 22, 23):
+        valid_codes = {20, 21, 22, 23}
+        for code in valid_codes:
             self.assertTrue(TLSRecordContentType.has_value(code))
 
             name = TLSRecordContentType(code).name()
@@ -40,6 +43,11 @@ class TestTLSRecord(unittest.TestCase):
                             TLSRecordContentType.HANDSHAKE,
                             TLSRecordContentType.APPLICATION_DATA):
             self.assertTrue(0 <= enumeration.value <= 255)
+
+        for code in range(0, 256):
+            if code not in valid_codes:
+                with self.assertRaises(ValueError):
+                    _ = TLSRecordContentType(code)
 
     def test_TLSRecordDecodeErrors(self):
         with self.assertRaises(DecodeError):
@@ -66,6 +74,37 @@ class TestTLSRecord(unittest.TestCase):
             frame = "1602010001FF"
             TLSRecord.parse(bytes.fromhex(frame), self.security_params)
 
+
+class TestTLSChangeCipherSpec(unittest.TestCase):
+    @classmethod
+    def setUp(cls):
+        cls.change_data = "01"
+        cls.security_params = SecurityParameters()
+
+    def test_RecordSerialize(self):
+        change = TLSChangeCipherSpecRecord(bytes.fromhex(self.change_data))
+
+        with self.assertRaises(NotImplementedError):
+            # TODO Add support
+            expected = "140301000101"
+            assertGeneratedFrameEquals(self, change.pack(), expected)
+
+    def test_RecordDecode(self):
+        # Construct frame
+        record_frame = "140301000101"
+
+        with self.assertRaises(NotImplementedError):
+            # TODO Add support
+            records = TLSRecord.parse(bytes.fromhex(record_frame), self.security_params)
+
+            self.assertIsNotNone(records)
+            self.assertIsInstance(records, list)
+            self.assertEqual(len(records), 1)
+
+            record = records[0]
+            self.assertIsInstance(record, TLSChangeCipherSpecRecord)
+            self.assertEqual(record.content_type, TLSRecordContentType.CHANGE_CIPHER_SPEC)
+            self.assertEqual(record.data.hex(), self.change_data)
 
 if __name__ == '__main__':
     unittest.main()
