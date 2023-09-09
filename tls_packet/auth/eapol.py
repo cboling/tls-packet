@@ -15,12 +15,11 @@
 # -------------------------------------------------------------------------
 
 import struct
-
 from enum import IntEnum
-from typing import Union, Optional, List, Any
+from typing import Union, Optional, List, Tuple, Any
 
-from tls_packet.packet import Packet, PacketPayload, DecodeError, PARSE_ALL
 from tls_packet.auth.eap import EAP
+from tls_packet.packet import Packet, PacketPayload, DecodeError, PARSE_ALL
 
 
 class EAPOLPacketType(IntEnum):
@@ -44,6 +43,10 @@ class EAPOLPacketType(IntEnum):
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
 
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
+
 
 class EAPOL(Packet):
     """
@@ -55,8 +58,8 @@ class EAPOL(Packet):
            uint16 length;
         ... type specific data here
     """
-    def __init__(self, packet_type: EAPOLPacketType, length: [int] = None, version: Optional[int] = 2, **kwargs):
 
+    def __init__(self, packet_type: EAPOLPacketType, version: Optional[int] = 2, length: [int] = None, **kwargs):
         super().__init__(**kwargs)
         self._version = version
         self._packet_type = EAPOLPacketType(packet_type)
@@ -64,9 +67,6 @@ class EAPOL(Packet):
 
         if not 1 <= self._version <= 3:
             raise ValueError(f"EAPOL: Invalid protocol version: {version}, must be 1..3")
-
-        if self._version != 1:
-            raise NotImplementedError(f"TODO: Only version 2 supported at this time")
 
     def __repr__(self):
         return f"{self.__class__.__qualname__}: Type: {self._packet_type}(v{self._version}), Len: {self._msg_length}"
@@ -76,8 +76,13 @@ class EAPOL(Packet):
         return 0x888e
 
     @property
+    def version(self) -> int:
+        return self._version
+
+    @property
+    # TODO: Make this length consistent with other packet types
     def length(self) -> int:
-        return self._msg_length if self._msg_length is not None else len(bytes(self))
+        return self._msg_length if self._msg_length is not None else None
 
     @property
     def packet_type(self) -> EAPOLPacketType:
@@ -110,7 +115,7 @@ class EAPOL(Packet):
             }.get(msg_type)
 
             print(f"EAPOL:parse. Before Decompression: {frame.hex()}")
-            packet = frame_type.parse(frame, *args, version=version, length=length, **kwargs)
+            packet = frame_type.parse(frame, version, length, *args, **kwargs)
 
             if packet is None:
                 raise DecodeError(f"Failed to decode EAPOL: {frame_type}")
@@ -144,15 +149,11 @@ class EapolEAP(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'EapolEAP':
+    def parse(frame: bytes, version: int, length: int, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'EapolEAP':
         required = 4 + 4
 
         if len(frame) < required:
             raise DecodeError(f"EapolEAP: message truncated: Expected at least {required} bytes, got: {len(frame)}")
-
-        version, msg_type, length = struct.unpack_from("!BBH", frame)
-        if msg_type != EAPOLPacketType.EAPOL_EAP:
-            raise DecodeError(f"EapolEAP: Message type is not EAPOL_EAP. Found: {msg_type}")
 
         offset = 4
         required = offset + length
@@ -168,7 +169,7 @@ class EapolEAP(EAPOL):
             # Save it as blob data (note that we use the decompressed data)
             payload = PacketPayload(payload_data, *args, **kwargs)
 
-        return EapolEAP(eap=payload, version=version, **kwargs)
+        return EapolEAP(eap=payload, version=version, length=length, **kwargs)
 
 
 class EapolStart(EAPOL):
@@ -189,55 +190,49 @@ class EapolStart(EAPOL):
         super().__init__(EAPOLPacketType.EAPOL_START, **kwargs)
         self._tlvs = tlvs or []
 
+        if self._version < 3 and len(self._tlvs) > 0:
+            raise DecodeError("EapolStart: TLVs only supported in version 3 or later")
+
+    @property
+    def tlvs(self) -> Tuple[Any]:
+        return tuple(self._tlvs)
+
     def pack(self, **argv) -> bytes:
-        raise NotImplementedError("Not yet implemented")
+        payload = b''
+
+        if self._version >= 3 and len(self._tlvs) > 0:
+            raise NotImplementedError("EapolStart: Version 3 TLV Support is not yet available")
+
+        return super().pack(payload=payload)
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapolStart':
-        required = 4
-
-        if len(frame) < required:
-            raise DecodeError(f"EapolStart: message truncated: Expected at least {required} bytes, got: {len(frame)}")
-
-        version, msg_type, length = struct.unpack_from("!BBH", frame)
-        if msg_type != EAPOLPacketType.EAPOL_EAP:
-            raise DecodeError(f"EapolStart: Message type is not EAPOL_Start. Found: {msg_type}")
-
+    def parse(frame: bytes, version: int, length: int, *args, **kwargs) -> 'EapolStart':
         tlvs = None
-        if version >= 3 and length > 0:
-            # TODO: Support when needed
+        if version >= 3 and length > 4:
+            # TODO: Support when needed.  Add length check for truncated...
             raise NotImplementedError("TODO: not yet implemented")
 
-        return EapolStart(tlvs=tlvs, version=version, **kwargs)
+        return EapolStart(version=version, length=length, tlvs=tlvs, **kwargs)
 
 
 class EapolLogoff(EAPOL):
     def __init__(self, **kwargs):
         super().__init__(EAPOLPacketType.EAPOL_LOGOFF, **kwargs)
 
-    def pack(self, **argv) -> bytes:
-        raise NotImplementedError("Not yet implemented")
+        if self._msg_length:
+            raise DecodeError(f"EapolLogoff: Packet body length not zero: found {self._msg_length}")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapolLogoff':
-        required = 4
-
-        if len(frame) < required:
-            raise DecodeError(f"EapolLogoff: message truncated: Expected at least {required} bytes, got: {len(frame)}")
-
-        version, msg_type, length = struct.unpack_from("!BBH", frame)
-        if msg_type != EAPOLPacketType.EAPOL_EAP:
-            raise DecodeError(f"EapolLogoff: Message type is not EAPOL_Start. Found: {msg_type}")
-
+    def parse(frame: bytes, version: int, length: int, *args, **kwargs) -> 'EapolLogoff':
         if length > 0:
             raise DecodeError(f"EapolLogoff: message payload length should be 0, found: {length}")
 
-        return EapolLogoff(version=version, **kwargs)
+        return EapolLogoff(version=version, length=length, **kwargs)
 
 
 class EapolKey(EAPOL):
     def __init__(self, **kwargs):
-        super().__init__(EAPOLPacketType.EAPOL_Key, **kwargs)
+        super().__init__(EAPOLPacketType.EAPOL_KEY, **kwargs)
         raise NotImplementedError("Not yet implemented")
 
     def pack(self, **argv) -> bytes:
