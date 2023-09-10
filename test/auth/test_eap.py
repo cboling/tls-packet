@@ -248,7 +248,7 @@ class TestEapFinish(unittest.TestCase):
 class TestEapPacket(unittest.TestCase):
     def test_EAPType(self):
         # Change underscores to spaces
-        valid_codes = {1, 3, 4, 5, 6, 13, 21, 25}
+        valid_codes = {0, 1, 3, 4, 5, 6, 13, 21, 25}
 
         for code in valid_codes:
             self.assertTrue(EapType.has_value(code))
@@ -256,7 +256,8 @@ class TestEapPacket(unittest.TestCase):
             name = EapType(code).name()
             self.assertFalse('_' in name)
 
-        for enumeration in (EapType.EAP_IDENTITY,
+        for enumeration in (EapType.EAP_NO_ALTERNATIVES,
+                            EapType.EAP_IDENTITY,
                             EapType.EAP_LEGACY_NAK,
                             EapType.EAP_MD5_CHALLENGE,
                             EapType.EAP_ONE_TIME_PASSWORD,
@@ -337,13 +338,14 @@ class TestLegacyNak(unittest.TestCase):
     def setUp(cls):
         cls._eap_id = 0x78
         cls._ident = bytes("user@example.org", "utf-8")
-        cls._desired_auth = (EapType.EAP_MD5_CHALLENGE,)
+        cls._desired_auth = EapType.EAP_MD5_CHALLENGE
         # TODO: Is there a limit on type_data size?
 
     def testDefaults(self):
         eap = EapLegacyNak()
         self.assertEqual(eap.eap_type, EapType.EAP_LEGACY_NAK)
-        self.assertEqual(eap.desired_auth, tuple())
+        self.assertEqual(len(eap.desired_auth), 1)
+        self.assertEqual(eap.desired_auth[0], EapType.EAP_NO_ALTERNATIVES)
 
     def test_ResponseFrameSerialize(self):
         expected = f"02{self._eap_id:02x}00060304"
@@ -360,10 +362,11 @@ class TestLegacyNak(unittest.TestCase):
 
         self.assertIsInstance(eap, EapResponse)
 
-        identity = eap.type_data
-        self.assertIsInstance(identity, EapLegacyNak)
-        self.assertEqual(identity.eap_type, EapType.EAP_LEGACY_NAK)
-        self.assertEqual(identity.desired_auth, self._desired_auth)
+        md5 = eap.type_data
+        self.assertIsInstance(md5, EapLegacyNak)
+        self.assertEqual(md5.eap_type, EapType.EAP_LEGACY_NAK)
+        self.assertEqual(len(md5.desired_auth), 1)
+        self.assertEqual(md5.desired_auth[0], self._desired_auth)
 
         # TODO: Test other desired auth combinations
 
@@ -427,6 +430,7 @@ class TestEapMd5Challenge(unittest.TestCase):
         self.assertEqual(md5.extra_data, self._extra_data)
 
         # TODO: Test other combinations
+
 
 if __name__ == '__main__':
     unittest.main()

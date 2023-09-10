@@ -38,6 +38,7 @@ class EapCode(IntEnum):
 
 
 class EapType(IntEnum):
+    EAP_NO_ALTERNATIVES = 0  # Used with EAP Legacy NAK to specify no alternative methods
     EAP_IDENTITY = 1
     EAP_LEGACY_NAK = 3
     EAP_MD5_CHALLENGE = 4
@@ -339,15 +340,33 @@ class EapIdentity(EapPacket):
 
 
 class EapLegacyNak(EapPacket):
-    _eap_type = EapType.EAP_LEGACY_NAK
-    _supported_auths = (EapType.EAP_MD5_CHALLENGE, EapType.EAP_TLS)  # TODO: add others if neeeded
+    """
+    The legacy Nak Type is valid only in Response messages. It is
+    sent in reply to a Request where the desired authentication Type
+    is unacceptable. Authentication Types are numbered 4 and above.
+    The Response contains one or more authentication Types desired by
+    the Peer. Type zero (0) is used to indicate that the sender has
+    no viable alternatives, and therefore the authenticator SHOULD NOT
+    send another Request after receiving a Nak Response containing a
+    zero value.
 
-    def __init__(self, desired_auth: Optional[Union[EapType, Iterable[EapType]]] = None, **kwargs):
+    Since the legacy Nak Type is valid only in Responses and has very
+    limited functionality, it MUST NOT be used as a general purpose
+    error indication, such as for communication of error messages, or
+    negotiation of parameters specific to a particular EAP method.
+    """
+    _eap_type = EapType.EAP_LEGACY_NAK
+    _supported_auths = (EapType.EAP_NO_ALTERNATIVES, EapType.EAP_MD5_CHALLENGE, EapType.EAP_TLS)  # TODO: add others if neeeded
+
+    def __init__(self, desired_auth: Optional[Union[EapType, Iterable[EapType]]] = (EapType.EAP_NO_ALTERNATIVES,), **kwargs):
         super().__init__(**kwargs)
 
         desired_auth = desired_auth or []
         if isinstance(desired_auth, EapType):
             desired_auth = [desired_auth]
+
+        import sys
+        print(f"Desired init: {desired_auth}", file=sys.stderr)
 
         for auth in desired_auth:
             if EapType(auth) not in self._supported_auths:
@@ -357,6 +376,8 @@ class EapLegacyNak(EapPacket):
 
     @property
     def desired_auth(self) -> Tuple[EapType]:
+        import sys
+        print(f"Desired: {self._desired_auth}", file=sys.stderr)
         return tuple(self._desired_auth)
 
     def pack(self, **argv) -> bytes:
