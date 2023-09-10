@@ -15,7 +15,6 @@
 # -------------------------------------------------------------------------
 
 import struct
-import sys
 from enum import IntEnum
 from typing import Union, Optional, Iterable, Tuple, Set
 
@@ -132,9 +131,6 @@ class EAP(Packet):
                 EapType.EAP_TLS:                EapTls,
                 EapType.EAP_TTLS:               EapTtls,
             }.get(eap_type)
-
-            print(f"eap_type: {eap_type}", file=sys.stderr)
-            print(f"frame: '{frame.hex()}'", file=sys.stderr)
 
             packet = parser.parse(frame, *args, **kwargs)
 
@@ -281,11 +277,7 @@ class EapPacket(Packet):
 
     def pack(self, payload: Optional[bytes] = None) -> bytes:
         """ Convert to a packet for transmission """
-        print(f"payload: '{payload.hex()}'")
-        print(f"eap_type: '{self._eap_type}")
-
         buffer = struct.pack("!B", self._eap_type) + (payload or b"")
-        print(f"buffer: '{buffer.hex()}")
         return super().pack(payload=buffer)
 
 
@@ -423,8 +415,10 @@ class EapMd5Challenge(EapPacket):
         super().__init__(**kwargs)
         self._challenge = challenge or b""
         self._extra_data = extra_data or b""
-        print(f"EapMd5Challenge init challenge: '{self._challenge.hex()}'")
-        print(f"EapMd5Challenge init extra: '{self._extra_data.hex()}'")
+
+    @property
+    def challenge_len(self) -> int:
+        return len(self._challenge) if self._challenge else 0
 
     @property
     def challenge(self) -> bytes:
@@ -435,39 +429,26 @@ class EapMd5Challenge(EapPacket):
         return self._extra_data
 
     def pack(self, **argv) -> bytes:
-        buffer = struct.pack("!B", len(self._challenge))
-        print(f"EapMd5Challenge buffer-1: '{buffer.hex()}'")
-
-        buffer += self._challenge
-        print(f"EapMd5Challenge buffer-2: '{buffer.hex()}'")
-
-        buffer += self._extra_data
-        print(f"EapMd5Challenge buffer-3: '{buffer.hex()}'")
-
+        buffer = struct.pack("!B", len(self._challenge)) + self._challenge + self._extra_data
         return super().pack(payload=buffer)
 
     @staticmethod
     def parse(frame: bytes, *args, **kwargs) -> 'EapMd5Challenge':
         length = len(frame)
-        print(f"EapMd5Challenge frame: {frame.hex()}")
 
         if len(frame) < length:
             raise DecodeError(f"EapMd5Challenge: message truncated: Expected at least {length} bytes, got: {len(frame)}")
 
         challenge_length, = struct.unpack_from("!B", frame)
 
-        print(f"EapMd5Challenge challenge_length: {challenge_length}/{len(frame[1:])}")
         if length - 1 < challenge_length:
             raise DecodeError(f"EapMd5Challenge: challenge truncated: Expected at least {challenge_length} bytes, got: {length - 1}")
 
         offset = 1
-        challenge = frame[offset:offset + challenge_length]
+        challenge = frame[offset: offset + challenge_length]
 
         offset += challenge_length
         extra_data = frame[offset:]
-
-        print(f"EapMd5Challenge challenge: '{challenge.hex()}'")
-        print(f"EapMd5Challenge extra: '{extra_data.hex()}'")
 
         return EapMd5Challenge(challenge=challenge, extra_data=extra_data, length=length, **kwargs)
 

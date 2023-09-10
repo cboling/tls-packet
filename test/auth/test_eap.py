@@ -372,8 +372,9 @@ class TestEapMd5Challenge(unittest.TestCase):
     @classmethod
     def setUp(cls):
         cls._eap_id = 0x78
-        cls._challenge = bytes("b6ef2b639c94f765f8c039a468bc0da8", "utf-8")
+        cls._challenge = bytes.fromhex("b6ef2b639c94f765f8c039a468bc0da8")
         cls._extra_data = b""
+        cls._challenge_response_blob = bytes.fromhex("c914a629540dae16de664c2a5013d832")
 
     def testDefaults(self):
         eap = EapMd5Challenge()
@@ -399,30 +400,33 @@ class TestEapMd5Challenge(unittest.TestCase):
         md5 = eap.type_data
         self.assertIsInstance(md5, EapMd5Challenge)
         self.assertEqual(md5.eap_type, EapType.EAP_MD5_CHALLENGE)
+        self.assertEqual(md5.challenge_len, len(md5.challenge))
         self.assertEqual(md5.challenge, self._challenge)
         self.assertEqual(md5.extra_data, self._extra_data)
 
-    # def test_ResponseFrameSerialize(self):
-    #     expected = f"02{self._eap_id:02x}00160410c914a629540dae16de664c2a5013d832"
-    #
-    #     identity = EapMd5Challenge(desired_auth=self._desired_auth)
-    #     eap = EapResponse(EapType.EAP_MD5_CHALLENGE, identity, eap_id=self._eap_id)
-    #     assertGeneratedFrameEquals(self, eap.pack(), expected)
-    #     # TODO: Test other combinations
-    #
-    # def test_ResponseFrameDecode(self):
-    #     # Construct frame
-    #     frame = f"02{self._eap_id:02x}00160410c914a629540dae16de664c2a5013d832"
-    #     eap = EAP.parse(bytes.fromhex(frame))
-    #
-    #     self.assertIsInstance(eap, EapResponse)
-    #
-    #     identity = eap.type_data
-    #     self.assertIsInstance(identity, EapMd5Challenge)
-    #     self.assertEqual(identity.eap_type, EapType.EAP_MD5_CHALLENGE)
-    #     self.assertEqual(identity.desired_auth, self._desired_auth)
-    #
-    #     # TODO: Test other combinations
+    def test_ResponseFrameSerialize(self):
+        expected = f"02{self._eap_id:02x}00160410c914a629540dae16de664c2a5013d832"
+
+        md5 = EapMd5Challenge(challenge=self._challenge_response_blob)
+        eap = EapResponse(EapType.EAP_MD5_CHALLENGE, md5, eap_id=self._eap_id)
+        assertGeneratedFrameEquals(self, eap.pack(), expected)
+        # TODO: Test other combinations
+
+    def test_ResponseFrameDecode(self):
+        # Construct frame
+        frame = f"02{self._eap_id:02x}00160410c914a629540dae16de664c2a5013d832"
+        eap = EAP.parse(bytes.fromhex(frame))
+
+        self.assertIsInstance(eap, EapResponse)
+
+        md5 = eap.type_data
+        self.assertIsInstance(md5, EapMd5Challenge)
+        self.assertEqual(md5.eap_type, EapType.EAP_MD5_CHALLENGE)
+        self.assertEqual(md5.challenge_len, len(md5.challenge))
+        self.assertEqual(md5.challenge, self._challenge_response_blob)
+        self.assertEqual(md5.extra_data, self._extra_data)
+
+        # TODO: Test other combinations
 
 if __name__ == '__main__':
     unittest.main()
