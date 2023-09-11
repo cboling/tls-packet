@@ -16,4 +16,5 @@ the users can tune for the performance they need.
 
 | Version | Notes                                                      |
 |:-------:|:-----------------------------------------------------------|
+|  0.0.2  | Many client side decode in place and under unit test       |
 |  0.0.1  | Initial build to get package installation scripts together |
