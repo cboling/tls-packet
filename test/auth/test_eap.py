@@ -248,7 +248,7 @@ class TestEapFinish(unittest.TestCase):
 class TestEapPacket(unittest.TestCase):
     def test_EAPType(self):
         # Change underscores to spaces
-        valid_codes = {0, 1, 3, 4, 5, 6, 13, 21, 25}
+        valid_codes = {0, 1, 3, 4, 5, 6, 13, 21, 25, 254}
 
         for code in valid_codes:
             self.assertTrue(EapType.has_value(code))
@@ -264,7 +264,8 @@ class TestEapPacket(unittest.TestCase):
                             EapType.EAP_GENERIC_TOKEN_CARD,
                             EapType.EAP_TLS,
                             EapType.EAP_TTLS,
-                            EapType.EAP_PEAP):
+                            EapType.EAP_PEAP,
+                            EapType.EAP_EXPANDED_TYPES):
             self.assertTrue(0 <= enumeration.value <= 255)
 
         for code in range(0, 256):

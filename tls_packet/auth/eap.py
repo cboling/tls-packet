@@ -48,6 +48,8 @@ class EapType(IntEnum):
     EAP_TTLS = 21
     EAP_PEAP = 25
 
+    EAP_EXPANDED_TYPES = 254
+
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
 
@@ -122,6 +124,7 @@ class EAP(Packet):
 
     @staticmethod
     def parse_eap_type(eap_type: EapType, frame: bytes, *args, **kwargs) -> Packet:
+        from tls_packet.auth.eap_tls import EapTls
         try:
             parser = {
                 EapType.EAP_IDENTITY:           EapIdentity,
@@ -313,6 +316,16 @@ class EapIdentity(EapPacket):
     the peer MAY provide an abbreviated Identity Response (such as
     omitting the peer-name portion of the NAI [RFC2486]). For further
     discussion of identity protection, see Section 7.3
+
+    Type-Data
+        This field MAY contain a displayable message in the Request,
+        containing UTF-8 encoded ISO 10646 characters [RFC2279]. Where
+        the Request contains a null, only the portion of the field prior
+        to the null is displayed. If the Identity is unknown, the
+        Identity Response field should be zero bytes in length. The
+        Identity Response field MUST NOT be null terminated. In all
+        cases, the length of the Type-Data field is derived from the
+        Length field of the Request/Response packet.
     """
     _eap_type = EapType.EAP_IDENTITY
 
@@ -354,6 +367,20 @@ class EapLegacyNak(EapPacket):
     limited functionality, it MUST NOT be used as a general purpose
     error indication, such as for communication of error messages, or
     negotiation of parameters specific to a particular EAP method.
+
+    Type-Data
+        Where a peer receives a Request for an unacceptable authentication
+        Type (4-253,255), or a peer lacking support for Expanded Types
+        receives a Request for Type 254, a Nak Response (Type 3) MUST be
+        sent. The Type-Data field of the Nak Response (Type 3) MUST
+        contain one or more octets indicating the desired authentication
+        Type(s), one octet per Type, or the value zero (0) to indicate no
+        proposed alternative. A peer supporting Expanded Types that
+        receives a Request for an unacceptable authentication Type (4-253,
+        255) MAY include the value 254 in the Nak Response (Type 3) to
+        indicate the desire for an Expanded authentication Type. If the
+        authenticator can accommodate this preference, it will respond
+        with an Expanded Type Request (Type 254).
     """
     _eap_type = EapType.EAP_LEGACY_NAK
     _supported_auths = (EapType.EAP_NO_ALTERNATIVES, EapType.EAP_MD5_CHALLENGE, EapType.EAP_TLS)  # TODO: add others if neeeded
@@ -365,9 +392,6 @@ class EapLegacyNak(EapPacket):
         if isinstance(desired_auth, EapType):
             desired_auth = [desired_auth]
 
-        import sys
-        print(f"Desired init: {desired_auth}", file=sys.stderr)
-
         for auth in desired_auth:
             if EapType(auth) not in self._supported_auths:
                 raise NotImplementedError(f"EapLegacyNak: AuthType {auth} is not a supported desired Auth type")
@@ -376,8 +400,6 @@ class EapLegacyNak(EapPacket):
 
     @property
     def desired_auth(self) -> Tuple[EapType]:
-        import sys
-        print(f"Desired: {self._desired_auth}", file=sys.stderr)
         return tuple(self._desired_auth)
 
     def pack(self, **argv) -> bytes:
@@ -390,8 +412,11 @@ class EapLegacyNak(EapPacket):
     @staticmethod
     def parse(frame: bytes, *args, **kwargs) -> 'EapLegacyNak':
         length = len(frame)
-        if len(frame) < length:
-            raise DecodeError(f"EapLegacyNak: message truncated: Expected at least {length} bytes, got: {len(frame)}")
+
+        # Always at least one octet of type-data
+        required = 1
+        if length < required:
+            raise DecodeError(f"EapLegacyNak: message truncated: Expected at least {required} bytes, got: {length}")
 
         desired_auth = {auth for auth in frame[:length]}
 
@@ -429,6 +454,11 @@ class EapMd5Challenge(EapPacket):
     MAY support entering passphrases with non-ASCII characters. See
     Section 5 for instructions how the input should be processed and
     encoded into octets.
+
+    Type-Data
+        The contents of the Type-Data field is summarized below. For
+        reference on the use of these fields, see the PPP Challenge
+        Handshake Authentication Protocol
     """
     _eap_type = EapType.EAP_MD5_CHALLENGE
 
@@ -475,6 +505,29 @@ class EapMd5Challenge(EapPacket):
 
 
 class EapOneTimePassword(EapPacket):
+    """
+    The One-Time Password system is defined in "A One-Time Password
+    System" [RFC2289] and "OTP Extended Responses" [RFC2243]. The
+    Request contains an OTP challenge in the format described in
+    [RFC2289]. A Response MUST be sent in reply to the Request. The
+    Response MUST be of Type 5 (OTP), Nak (Type 3), or Expanded Nak
+    (Type 254). The Nak Response indicates the peer’s desired
+    authentication Type(s). The EAP OTP method is intended for use
+    with the One-Time Password system only, and MUST NOT be used to
+    provide support for cleartext passwords.
+
+    Type-Data
+        The Type-Data field contains the OTP "challenge" as a displayable
+        message in the Request. In the Response, this field is used for
+        the 6 words from the OTP dictionary [RFC2289]. The messages MUST
+        NOT be null terminated. The length of the field is derived from
+        the Length field of the Request/Reply packet.
+        Note: [RFC2289] does not specify how the secret pass-phrase is
+        entered by the user, or how the pass-phrase is converted into
+        octets. EAP OTP implementations MAY support entering passphrases
+        with non-ASCII characters. See Section 5 for instructions on how
+        the input should be processed and encoded into octets
+    """
     _eap_type = EapType.EAP_ONE_TIME_PASSWORD
 
     def __init__(self, **kwargs):
@@ -485,11 +538,41 @@ class EapOneTimePassword(EapPacket):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapOneTimePassword':
+    def parse(frame: bytes, *args, **kwargs) -> 'EapOneTimePassword':
         raise NotImplementedError("Not yet implemented")
 
 
 class EapGenericTokenCard(EapPacket):
+    """
+    The Generic Token Card Type is defined for use with various Token
+    Card implementations which require user input. The Request
+    contains a displayable message and the Response contains the Token
+    Card information necessary for authentication. Typically, this
+    would be information read by a user from the Token card device and
+    entered as ASCII text. A Response MUST be sent in reply to the
+    Request. The Response MUST be of Type 6 (GTC), Nak (Type 3), or
+    Expanded Nak (Type 254). The Nak Response indicates the peer’s
+    desired authentication Type(s). The EAP GTC method is intended
+    for use with the Token Cards supporting challenge/response
+
+    authentication and MUST NOT be used to provide support for
+    cleartext passwords in the absence of a protected tunnel with
+    server authentication.
+
+    Type-Data
+        The Type-Data field in the Request contains a displayable message
+        greater than zero octets in length. The length of the message is
+        determined by the Length field of the Request packet. The message
+        MUST NOT be null terminated. A Response MUST be sent in reply to
+        the Request with a Type field of 6 (Generic Token Card). The
+        Response contains data from the Token Card required for
+        authentication. The length of the data is determined by the
+        Length field of the Response packet.
+
+        EAP GTC implementations MAY support entering a response with non-
+        ASCII characters. See Section 5 for instructions how the input
+        should be processed and encoded into octets.
+    """
     _eap_type = EapType.EAP_GENERIC_TOKEN_CARD
 
     def __init__(self, **kwargs):
@@ -500,22 +583,7 @@ class EapGenericTokenCard(EapPacket):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapGenericTokenCard':
-        raise NotImplementedError("Not yet implemented")
-
-
-class EapTls(EapPacket):
-    _eap_type = EapType.EAP_TLS
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        raise NotImplementedError("Not yet implemented")
-
-    def pack(self, **argv) -> bytes:
-        raise NotImplementedError("Not yet implemented")
-
-    @staticmethod
-    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapTls':
+    def parse(frame: bytes, *args, **kwargs) -> 'EapGenericTokenCard':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -530,5 +598,5 @@ class EapTtls(EapPacket):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(eap_code: EapCode, frame: bytes, *args, **kwargs) -> 'EapTtls':
+    def parse(frame: bytes, *args, **kwargs) -> 'EapTtls':
         raise NotImplementedError("Not yet implemented")
