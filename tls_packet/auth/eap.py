@@ -158,6 +158,9 @@ class EAP(Packet):
 
 class EapRequest(EAP):
     def __init__(self, eap_type: EapType, eap_type_data: Union['EapPacket', PacketPayload], **kwargs):
+        import sys
+        print(f"EapRequest.__init__: entry, type: {eap_type}, type_data: {eap_type_data}", file=sys.stderr)
+
         super().__init__(EapCode.EAP_REQUEST, **kwargs)
         self._eap_type = EapType(eap_type)
         self._eap_type_data = eap_type_data  # TODO: Treat next in future as a layer
@@ -282,6 +285,10 @@ class EapPacket(Packet):
     def pack(self, payload: Optional[bytes] = None) -> bytes:
         """ Convert to a packet for transmission """
         buffer = struct.pack("!B", self._eap_type) + (payload or b"")
+
+        import sys
+        print(f"EapPacket buffer: {buffer.hex()}", file=sys.stderr)
+
         return super().pack(payload=buffer)
 
 

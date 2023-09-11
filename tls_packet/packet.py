@@ -14,12 +14,10 @@
 # limitations under the License
 # -------------------------------------------------------------------------
 
+import copy
 import sys
 import time
-
-import copy
 from typing import List, Tuple, Union, Iterable, Optional, Any
-
 
 PARSE_ALL = int(1e6)     # Parse all packet layers
 
@@ -46,16 +44,19 @@ class Packet:
     """ Base packet class """
     def __init__(self,
                  *args,
-                 original_frame: Optional[bytes] = b'',
+                 original_frame: Optional[bytes] = b'',  # TODO: Is this ever used or is useful?
                  layers: Optional[Iterable['Packet']] = None,
                  timestamp: Optional[Union[int, None]] = None, **kwargs):
+
+        import sys
+        print(f"packet.__init__: Entry, layers: {layers}", file=sys.stderr)
 
         if len(args):
             # By now, all derived classes should have consumed any extra positional arguments.  Perhaps we missed one or had a type?
             print(f"TODO: Reached base Packet class with additional arguments: {len(args)}")
 
         if len(kwargs):
-            # By now, all derived classes should have consumed any extre keywords.  Perhaps we missed one or had a type?
+            # By now, all derived classes should have consumed any extra keywords.  Perhaps we missed one or had a type?
             print(f"TODO: Reached base Packet class with unknown keywords: {kwargs}")
 
         self._timestamp:int = timestamp or get_time_ns()           # Creation or capture timestamp

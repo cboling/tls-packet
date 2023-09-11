@@ -15,6 +15,7 @@
 # -------------------------------------------------------------------------
 
 import struct
+import sys
 from typing import Optional
 
 from tls_packet.auth.eap import EapPacket, EapType
@@ -29,7 +30,10 @@ class EapTls(EapPacket):
     START_FLAG_MASK = 0x20
     ALL_FLAG_MASK = LENGTH_FLAG_MASK | MORE_FLAG_MASK | START_FLAG_MASK
 
-    def __init__(self, flags: int, tls_length: Optional[int] = 0, payload: Optional[bytes] = None, **kwargs):
+    def __init__(self, flags: Optional[int] = 0, tls_length: Optional[int] = 0, payload: Optional[bytes] = None, **kwargs):
+        import sys
+        print(f"eapTls.__init__: entry, flags: {flags}, tls_len: {tls_length}", file=sys.stderr)
+
         super().__init__(**kwargs)
         self._flags = flags
         self._tls_length = tls_length
@@ -60,11 +64,13 @@ class EapTls(EapPacket):
         return self._flags & self.START_FLAG_MASK == self.START_FLAG_MASK
 
     def pack(self, **argv) -> bytes:
-        if self.length_flag():
-            buffer = struct.pack("!BI", self._flags, self._tls_length) + self._tls_data
-        else:
-            buffer = bytes(self._flags)
+        buffer = struct.pack("!B", self._flags)
 
+        if self.length_flag():
+            print(f"flags and data:  {self._flags:02x}, len: {self._tls_length}", file=sys.stderr)
+            buffer += struct.pack("!I", self._tls_length) + self._tls_data
+
+        print(f"eap-tls buffer: {buffer.hex()}", file=sys.stderr)
         return super().pack(payload=buffer)
 
     @staticmethod
@@ -82,6 +88,8 @@ class EapTls(EapPacket):
         """
         length = len(frame)
         required = 1  # TLS Message Length only included if 'L' flag bit is set
+        import sys
+        print(f"eapTls.parse: entry, frame: {frame.hex()}", file=sys.stderr)
 
         if length < required:
             raise DecodeError(f"EapTls: message truncated: Expected at least {required} bytes, got: {length}")
