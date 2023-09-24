@@ -78,6 +78,19 @@ class NamedCurve(IntEnum):
     def has_value(cls, val: int) -> bool:
         return val in cls._value2member_map_
 
+class ECPointsFormat(IntEnum):		# TODO: Move to own file
+
+    UNCOMPRESSED = 0
+    ANSIX962_COMPRESSED_PRIME = 1
+    ANSIX962_COMPRESSED_CHAR2 = 2
+
+    def name(self) -> str:
+        return super().name.replace("_", " ").capitalize()
+
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
+
 
 class TLSServerKeyExchange(TLSHandshake):
     """

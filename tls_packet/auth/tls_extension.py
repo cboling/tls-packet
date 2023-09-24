@@ -22,7 +22,7 @@ from tls_packet.packet import DecodeError, PARSE_ALL
 from tls_packet.packet import Packet
 
 
-#from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve
+from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve, ECPointsFormat
 
 
 class TLSHelloExtensionType(IntEnum):
@@ -241,7 +241,7 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.SERVER_AUTHZ:                           TLSxxxExtension,
                     # TLSHelloExtensionType.CERT_TYPE:                              TLSxxxExtension,
                     TLSHelloExtensionType.SUPPORTED_GROUPS:                       TLSSupportedGroupsExtension,     # Also known as Elliptic Curves
-                    #TLSHelloExtensionType.EC_POINT_FORMATS:                       TLSECPointsFormatExtension,
+                    TLSHelloExtensionType.EC_POINT_FORMATS:                       TLSECPointsFormatExtension,
                     # TLSHelloExtensionType.SRP:                                    TLSxxxExtension,
                     #TLSHelloExtensionType.SIGNATURE_ALGORITHMS:                   TLSSignatureAlgorithmsExtension,
                     # TLSHelloExtensionType.USE_SRTP:                               TLSxxxExtension,
@@ -339,7 +339,7 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
     """
     TLSSupportedGroupsExtension  (renamed from "elliptic_curves") [RFC8422] [RFC7919]
     """
-    def __init__(self, *args, supported_groups: Optional[List[int]] = [], **kwargs):
+    def __init__(self, *args, supported_groups: Optional[List[int]] = None, **kwargs):
         super().__init__(TLSHelloExtensionType.SUPPORTED_GROUPS, *args, **kwargs)
         self._supported_groups = supported_groups or []
 
@@ -358,7 +358,7 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
         if extn_data_len < required:
             raise DecodeError(f"TLSSupportedGroupsExtension: Extension truncated: Expected at least {required} bytes, got: {extn_data_len}")
 
-        extn_type, msg_len, extn_len = struct.unpack_from("!HHH", frame)
+        extn_type, _, extn_len = struct.unpack_from("!HHH", frame)
         if extn_type != TLSHelloExtensionType.SUPPORTED_GROUPS:
             raise DecodeError(f"TLSSupportedGroupsExtension: Extension type is not SUPPORTED_GROUPS. Found: {extn_type}")
 
@@ -385,8 +385,43 @@ class TLSECPointsFormatExtension(TLSHelloExtension):
     """
     TLSECPointsFormatExtension   [RFC8422]
     """
-    pass
-    # TODO: support __repr__()
+    def __init__(self, *args, formats: Optional[List[ECPointsFormat]] = None, **kwargs):
+        super().__init__(TLSHelloExtensionType.EC_POINT_FORMATS, *args, **kwargs)
+        self._formats = formats or []
+
+    def __repr__(self):
+        return super().__repr__() + f", Formats: [{', '.join(self._formats)}]"
+
+    @property
+    def formats(self) -> Tuple[int]:
+        return tuple(self._formats)
+
+    @staticmethod
+    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSECPointsFormatExtension', None]:
+        required = 1
+        extn_data_len = len(frame) - 4 - required
+
+        if extn_data_len < required:
+            raise DecodeError(f"TLSECPointsFormatExtension: Extension truncated: Expected at least {required} bytes, got: {extn_data_len}")
+
+        extn_type, _, extn_len = struct.unpack_from("!HHB", frame)
+        if extn_type != TLSHelloExtensionType.EC_POINT_FORMATS:
+            raise DecodeError(f"TLSECPointsFormatExtension: Extension type is not EC_POINT_FORMATS. Found: {extn_type}")
+
+        frame = frame[5:]
+        if len(frame) < extn_len:
+            raise DecodeError(f"TLSECPointsFormatExtension: Extension truncated: Expected at least {extn_len} bytes, got: {len(frame)}")
+
+        formats = [ECPointsFormat(frame[offset]) for offset in range(0, extn_len)]
+
+        return TLSECPointsFormatExtension(formats=formats, *args, **kwargs)
+
+    def pack(self,  payload: Optional[bytes] = b'') -> bytes:
+        buffer = struct.pack("!b", len(self._formats))
+        for ec_format in self._formats:
+            buffer += ec_format
+
+        return super().pack(buffer)
 
 
 class TLSSignatureAlgorithmsExtension(TLSHelloExtension):
