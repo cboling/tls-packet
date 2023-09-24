@@ -16,7 +16,9 @@
 
 import copy
 import os
+
 from enum import IntEnum
+from datetime import datetime
 from typing import Optional
 
 
@@ -97,7 +99,8 @@ class SecurityParameters:
                  client_random: Optional[bytes] = None,
                  server_random: Optional[bytes] = None):
 
-        client_random = client_random or os.urandom(32)
+        # Desired ones
+        client_random = client_random or int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
 
         self.prf_algorithm = prf_algorithm
         self.bulk_cipher_algorithm = bulk_cipher_algorithm
@@ -113,6 +116,24 @@ class SecurityParameters:
         self.master_secret = master_secret
         self.client_random = client_random
         self.server_random = server_random
+
+        # Ones from ssl book - TODO  Get rid of these
+        # self.active_cipher_suite: Union[CipherSuite, None] = None
+        # self.proposed_cipher_suite: Union[CipherSuite, None] = None
+        #
+        # self.master_key: bytes = b""
+        # self.connection_id: bytes = b""
+        # self.challenge: bytes = int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
+        #
+        # self.server_public_key: RSAKey = RSAKey()
+        #
+        # self.write_sequence_number = 0
+        # self.read_sequence_number = 0
+        #
+        # self.read_key: bytes = b""
+        # self.write_key: bytes = b""
+        # self.read_iv: bytes = b""
+        # self.write_iv: bytes = b""
 
     def copy(self, **kwargs) -> 'SecurityParameters':
         """ Create a copy of the security parameters and optionally override any existing values """

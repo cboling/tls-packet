@@ -51,22 +51,31 @@ class EapTls(EapPacket):
         return self._tls_length
 
     @property
-    def tls_data(self) -> int:
+    def tls_data(self) -> bytes:
         return self._tls_data
 
+    @property
     def length_flag(self) -> bool:
         return self._flags & self.LENGTH_FLAG_MASK == self.LENGTH_FLAG_MASK
 
+    @property
     def more_flag(self) -> bool:
         return self._flags & self.MORE_FLAG_MASK == self.MORE_FLAG_MASK
 
+    @property
     def start_flag(self) -> bool:
         return self._flags & self.START_FLAG_MASK == self.START_FLAG_MASK
+
+    # Following four are for Scapy decode compatibility
+    L = length_flag
+    M = more_flag
+    S = start_flag
+    tls_message_len = tls_length
 
     def pack(self, **argv) -> bytes:
         buffer = struct.pack("!B", self._flags)
 
-        if self.length_flag():
+        if self.length_flag:
             print(f"flags and data:  {self._flags:02x}, len: {self._tls_length}", file=sys.stderr)
             buffer += struct.pack("!I", self._tls_length) + self._tls_data
 

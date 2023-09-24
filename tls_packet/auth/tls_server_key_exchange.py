@@ -293,5 +293,20 @@ class TLSServerKeyExchange(TLSHandshake):
 
         return TLSServerKeyExchange(curve_type, named_curve, pubkey, signature, *args, length=msg_len, original_frame=frame, **kwargs)
 
+        # TODO: In another client, they had the cipher suite parse this message
+
+        # TODO: In other client, it created cipher suite with
+        # self.cipher_suite = CipherSuite.get_from_id(self.tls_version, self.client_random, self.server_random,
+        #                                             self.server_certificate, server_cipher_suite)
+        # And used it supported the parse_key_exchange method
+        #
+        # if self.is_server_key_exchange:  # Server key exchange
+        #     self.cipher_suite.parse_key_exchange_params(next_bytes)
+        #
+        #  key_exchange below is  ECDH, DH, or RSA
+        #
+        # def parse_key_exchange_params(self, params_bytes):
+        #     self.key_exchange.parse_params(params_bytes)
+
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

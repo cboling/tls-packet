@@ -17,6 +17,7 @@
 import os
 import struct
 from typing import Union, Optional, Iterable
+import sys
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import TLSCompressionMethod
@@ -89,25 +90,48 @@ class TLSServerHello(TLSHandshake):
 
         # Error checks
         self.version = version or (int(session.tls_version) if session is not None else int(TLSv1_2()))
-        self.random_bytes = random_data or os.urandom(32)
-        self.session_id = session_id
-        self.cipher = cipher
-        self.compression = compression
+        self._random_bytes = random_data or os.urandom(32)
+        self._session_id = session_id
+        self._cipher = cipher
+        self._compression = TLSCompressionMethod(compression)
         self.extensions = extensions or []
+
+        # TODO: In other client, it created cipher suite with
+        # self.cipher_suite = CipherSuite.get_from_id(self.tls_version, self.client_random, self.server_random,
+        #                                             self.server_certificate, server_cipher_suite)
+        # And used it supported the parse_key_exchange method
 
         # Error checks
         if self.version == int(TLSv1_3()):
             raise NotImplementedError("TLSServerHello: TLSv1.3 not yet supported")
 
-        if len(self.random_bytes) != 32:
+        if len(self._random_bytes) != 32:
             raise ValueError(f"TLSServerHello: Random must be exactly 32 bytes, received {len(self.random_bytes)}")
 
-        if self.session_id > 32 or session_id < 0:
-            raise ValueError(f"TLSServerHello: SessionID is an opaque value: 0..32, found, {self.session_id}")
+        if self._session_id > 32 or session_id < 0:
+            raise ValueError(f"TLSServerHello: SessionID is an opaque value: 0..32, found, {self._session_id}")
 
         # Unsupported at this time
         if extensions and not isinstance(extensions, PacketPayload):  # TODO: not yet supported
             raise NotImplementedError("Unsupported parameter")
+
+    @property
+    def cipher_suite(self) -> CipherSuite:
+        """ Cipher Suite selected by the server """
+        return self._cipher
+
+    @property
+    def compression_method(self) -> TLSCompressionMethod:
+        """ Compression method used """
+        return self._compression
+
+    @property
+    def session_id(self) -> int:
+        return self._session_id
+
+    @property
+    def random_bytes(self) -> bytes:
+        return self._random_bytes
 
     @staticmethod
     def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
@@ -135,7 +159,7 @@ class TLSServerHello(TLSHandshake):
         compression = TLSCompressionMethod(compression)
 
         if extension_length:
-            print("TODO: Pushing undecoded extensions into a payload object")
+            print("TODO: Pushing undecoded extensions into a payload object", file=sys.stderr)
             payload = PacketPayload(frame[offset:offset + extension_length])
         else:
             payload = None

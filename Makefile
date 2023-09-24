@@ -138,8 +138,8 @@ dist:										## Create source distribution of the python package
 	python setup.py sdist
 
 upload: clean lint test  dist	## Upload test version of python package to test.pypi.org
-	$(Q) echo "Uploading sdist to test.pypi.org"
-	twine upload --repository-url https://test.pypi.org/legacy/ dist/*
+	$(Q) echo "Uploading sdist to legacy.pypi.org"
+	${PYTHON} -m twine upload --repository tls-packet dist/*
 
 ######################################################################
 ## Utility

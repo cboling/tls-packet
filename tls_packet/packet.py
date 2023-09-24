@@ -48,8 +48,8 @@ class Packet:
                  layers: Optional[Iterable['Packet']] = None,
                  timestamp: Optional[Union[int, None]] = None, **kwargs):
 
-        import sys
-        print(f"packet.__init__: Entry, layers: {layers}", file=sys.stderr)
+        # import sys
+        # print(f"packet.__init__: Entry, layers: {layers}", file=sys.stderr)
 
         if len(args):
             # By now, all derived classes should have consumed any extra positional arguments.  Perhaps we missed one or had a type?

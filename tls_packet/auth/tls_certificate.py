@@ -15,6 +15,9 @@
 # -------------------------------------------------------------------------
 
 import struct
+import sys
+
+from cryptography.x509 import load_der_x509_certificate
 from typing import Union, Optional, List, Tuple, Iterable
 
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
@@ -157,6 +160,16 @@ class ASN_1_Cert:
     @property
     def certificate(self) -> bytes:
         return self._data
+
+    @property
+    def x509_certificate(self) -> 'Certificate':
+        try:
+            cert = load_der_x509_certificate(self._data)
+            return cert
+
+        except Exception as e:
+            print(f"Error loading X.509 certificate: {e}", file=sys.stderr)
+            return None
 
     @staticmethod
     def parse(frame: bytes) -> 'ASN_1_Cert':

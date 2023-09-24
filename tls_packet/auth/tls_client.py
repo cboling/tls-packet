@@ -54,13 +54,54 @@ class TLSClient:
         # Client random data is 32 bytes long
         client_random = random_data or int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
 
-        self._security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)
+        # Keep separate send/receive parameters so we can handle various receive sequences from server
+
+        self._receive_security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)
+        self._send_security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)
+
+
+        # TLS breaks it up into pending and active  (Look at state machine and its transitions setting of this)
+        # it uses the following, so tie the values below into what we save here
+        #         self._k_send = ""
+        #         self._k_recv = ""
+        #
+        self._security_parameters = {
+            'active_tx':  SecurityParameters().copy(client_random=client_random),
+            'active_rx':  SecurityParameters().copy(client_random=client_random),
+            'pending_tx': SecurityParameters().copy(client_random=client_random),
+            'pending_rx': SecurityParameters().copy(client_random=client_random)
+        }
+        #  So when we get the server_hello, use the 'pending_send_parameters' to stuff values in and later on during
+        #  server_key_exchange download, use that pending value
+        #
+        #
+        # static void init_protection_parameters( ProtectionParameters *parameters )
+        # {
+        #   parameters->MAC_secret = NULL;
+        #   parameters->key = NULL;
+        #   parameters->IV = NULL;
+        #   parameters->seq_num = 0;
+        #   parameters->suite = TLS_NULL_WITH_NULL_NULL;
+        # }
+        # static void init_parameters( TLSParameters *parameters )
+        # {
+        #   init_protection_parameters( &parameters->pending_send_parameters );
+        #   init_protection_parameters( &parameters->pending_recv_parameters );
+        #   init_protection_parameters( &parameters->active_send_parameters );
+        #   init_protection_parameters( &parameters->active_recv_parameters );
+
+
+
+
         # self.server_random = None
         self.session_id = session_id
         self.ciphers = ciphers or get_cipher_suites_by_version(self.tls_version, excluded=("PSK",))
         self.extensions = extensions
         self.cipher_suite: CipherSuite = None
-        self.server_certificate = None
+
+        # Following are decode from server messages.  Any better place for them
+        self.server_certificates = None
+        self.server_public_key = b""
 
         # TODO: Next are copied over from the AUTH machine and may or may not be used
         #       so we need to investigate if they are used or are duplicated above
@@ -75,18 +116,14 @@ class TLSClient:
         self.tls_session = None
         self.eap_tls_state = None
 
-        self.eap_tls_server_data = b''  # Reassembly area for EAP-TLS
-        self.eap_tls_expected_len = 0
-        self.eap_tls_last_id = 256
-        self.eap_tls_client_data_len = 0
-        # self.eap_tls_client_data_max_len = 994        # TODO: support fragmentation....
+
         print("*** Not enforcing client EAP-TLS fragmentation yet")
         self.eap_tls_client_data_max_len = 16000
 
         self._debug = debug
         self.is_server_key_exchange = False
 
-        # Probably want these
+        # Probably want these - TODO Eventually calculate the hash on the fly if possible
         self._client_handshake_records_sent: List['TLSRecord'] = []
         self._server_handshake_records_received: List['TLSRecord'] = []
 
@@ -111,8 +148,12 @@ class TLSClient:
         self.state_machine: TLSClientStateMachine = TLSClientStateMachine(self)
 
     @property
-    def security_parameters(self) -> SecurityParameters:
-        return self._security_parameters
+    def rx_security_parameters(self) -> SecurityParameters:
+        return self._receive_security_parameters
+
+    @property
+    def tx_security_parameters(self) -> SecurityParameters:
+        return self._send_security_parameters
 
     @property
     def tls_version(self) -> TLS:
@@ -163,10 +204,12 @@ class TLSClient:
         print(f"*** Last EAP ID: {eap_id}, EAP-LAST-ID: {self.eap_tls_last_id}")
 
         if self.state_machine.state == TLSClientStateMachine.INITIAL:
+            print(f"TLSClient.handle_tls_data: Start: {eap_id}")
             self.state_machine.start(eap_id=eap_id)
 
         elif eap_id == self._eap_tls_last_sent_id and self._eap_tls_last_sent_data is not None:
             # Handle a retransmit
+            print(f"TLSClient.handle_tls_data: Rx retransmit: eap_id: {eap_id}")
             self.auth_socket.send_response(eap_id, self._eap_tls_last_sent_data)
 
         else:
@@ -203,7 +246,7 @@ class TLSClient:
                 self.save_server_record(packet)
                 self.state_machine.rx_packet(eap_id, packet)
 
-    def _rx_server_eap_tls(self, eap_id: int, eap_tls: 'EAP_TLS') -> Union[Packet, List[Packet], None]:
+    def _rx_server_eap_tls(self, eap_id: int, eap_tls: Union['EAP_TLS', 'EapTls']) -> Union[Packet, List[Packet], None]:
         """
         Handle server data
 
@@ -259,7 +302,7 @@ class TLSClient:
 
                 try:
                     print(f"Reassembled packet: {self.eap_tls_server_data.hex()}")
-                    record_list = TLSRecord.parse(self.eap_tls_server_data, self.security_parameters)
+                    record_list = TLSRecord.parse(self.eap_tls_server_data, self.rx_security_parameters)
 
                 except Exception as _e:
                     record_list = None
