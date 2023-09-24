@@ -24,6 +24,7 @@ from tls_packet.auth.security_params import TLSCompressionMethod
 from tls_packet.auth.tls import TLSv1_2, TLSv1_3
 from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
+from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.packet import PacketPayload, DecodeError, PARSE_ALL
 
 
@@ -111,10 +112,6 @@ class TLSServerHello(TLSHandshake):
         if self._session_id > 32 or session_id < 0:
             raise ValueError(f"TLSServerHello: SessionID is an opaque value: 0..32, found, {self._session_id}")
 
-        # Unsupported at this time
-        if extensions and not isinstance(extensions, PacketPayload):  # TODO: not yet supported
-            raise NotImplementedError("Unsupported parameter")
-
     @property
     def cipher_suite(self) -> CipherSuite:
         """ Cipher Suite selected by the server """
@@ -157,25 +154,14 @@ class TLSServerHello(TLSHandshake):
         session_id, cipher, compression, extension_length = struct.unpack_from("!BHBH", frame, offset)
         offset += 6
         compression = TLSCompressionMethod(compression)
-
-        if extension_length:
-            print("TODO: Pushing undecoded extensions into a payload object", file=sys.stderr)
-            payload = PacketPayload(frame[offset:offset + extension_length])
-        else:
-            payload = None
-        #     # TODO: For now, just check the length and do not decode.  That comes later
-        #     remaining = frame_len - offset
-        #     if extension_length > remaining:
-        #         raise DecodeError(f"TLSServerHello: message truncated: extension length: {extension_length} but only {remaining} bytes left in frame")
-        #
-        #     _extension_blob_throw_it_away_for_now = frame[offset:offset+remaining]
-        #     offset += extension_length
+        extensions = TLSHelloExtension.parse(frame[offset:offset + extension_length]) if extension_length else None
+        # offset += extension_length
 
         if session_id > 32:
             raise DecodeError(f"TLSServerHello: SessionID is an opaque value: 0..32, found, {session_id}")
 
         return TLSServerHello(None, cipher, version=version, length=msg_len, random_data=random_data, compression=compression,
-                              session_id=session_id, extensions=payload, original_frame=frame, **kwargs)  # TODO: later ->  , extensions = extensions)
+                              session_id=session_id, extensions=extensions, original_frame=frame, **kwargs)  # TODO: later ->  , extensions = extensions)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

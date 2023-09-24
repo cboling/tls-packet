@@ -14,12 +14,15 @@
 # limitations under the License
 # -------------------------------------------------------------------------
 
-
+import struct
 from enum import IntEnum
-from typing import Union, Optional, Tuple, Iterable, List
+from typing import Union, Optional, Tuple, Any, List
 
+from tls_packet.packet import DecodeError, PARSE_ALL
 from tls_packet.packet import Packet
-from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve
+
+
+#from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve
 
 
 class TLSHelloExtensionType(IntEnum):
@@ -105,7 +108,7 @@ class TLSHelloExtensionType(IntEnum):
     SIGNATURE_ALGORITHMS_CERT              = 50  # [RFC8446]
     KEY_SHARE                              = 51  # [RFC8446]
     TRANSPARENCY_INFO                      = 52  # [RFC9162]
-    CONNECTION_ID                          = 53  # [RFC9146](deprecated)
+    CONNECTION_ID_DEPRECATED               = 53  # [RFC9146](deprecated)
     CONNECTION_ID                          = 54  # [RFC9146]
     EXTERNAL_ID_HASH                       = 55  # [RFC8844]
     EXTERNAL_SESSION_ID                    = 56  # [RFC8844]
@@ -199,11 +202,11 @@ class TLSHelloExtension(Packet):
                  session: Optional[Union['TLSClient', 'TLSServer']] = None, **kwargs):
         super().__init__(**kwargs)
         self._session = session
-        self._exten_type = TLSHelloExtension(exten_type)
+        self._exten_type = TLSHelloExtensionType(exten_type)
         self._msg_length = length
 
     def __repr__(self):
-        return f"{self.__class__.__qualname__}: Type: {self._msg_type}, Len: {self._msg_length}"
+        return f"{self.__class__.__qualname__}: Type: {self._exten_type}, Len: {self._msg_length}"
 
     @property
     def length(self) -> int:
@@ -238,9 +241,9 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.SERVER_AUTHZ:                           TLSxxxExtension,
                     # TLSHelloExtensionType.CERT_TYPE:                              TLSxxxExtension,
                     TLSHelloExtensionType.SUPPORTED_GROUPS:                       TLSSupportedGroupsExtension,     # Also known as Elliptic Curves
-                    TLSHelloExtensionType.EC_POINT_FORMATS:                       TLSECPointsFormatExtension,
+                    #TLSHelloExtensionType.EC_POINT_FORMATS:                       TLSECPointsFormatExtension,
                     # TLSHelloExtensionType.SRP:                                    TLSxxxExtension,
-                    TLSHelloExtensionType.SIGNATURE_ALGORITHMS:                   TLSSignatureAlgorithmsExtension,
+                    #TLSHelloExtensionType.SIGNATURE_ALGORITHMS:                   TLSSignatureAlgorithmsExtension,
                     # TLSHelloExtensionType.USE_SRTP:                               TLSxxxExtension,
                     # TLSHelloExtensionType.HEARTBEAT:                              TLSxxxExtension,
                     # TLSHelloExtensionType.APPLICATION_LAYER_PROTOCOL_NEGOTIATION: TLSxxxExtension,
@@ -249,8 +252,8 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.CLIENT_CERTIFICATE_TYPE:                TLSxxxExtension,
                     # TLSHelloExtensionType.SERVER_CERTIFICATE_TYPE:                TLSxxxExtension,
                     # TLSHelloExtensionType.PADDING:                                TLSxxxExtension,
-                    TLSHelloExtensionType.ENCRYPT_THEN_MAC:                       TLSEncryptThenMacExtension,
-                    TLSHelloExtensionType.EXTENDED_MASTER_SECRET:                 TLSExtendedMasterSecretExtension,
+                    #TLSHelloExtensionType.ENCRYPT_THEN_MAC:                       TLSEncryptThenMacExtension,
+                    #TLSHelloExtensionType.EXTENDED_MASTER_SECRET:                 TLSExtendedMasterSecretExtension,
                     # TLSHelloExtensionType.TOKEN_BINDING:                          TLSxxxExtension,
                     # TLSHelloExtensionType.CACHED_INFO:                            TLSxxxExtension,
                     # TLSHelloExtensionType.TLS_LTS:                                TLSxxxExtension,
@@ -278,7 +281,7 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.SIGNATURE_ALGORITHMS_CERT:              TLSxxxExtension,
                     # TLSHelloExtensionType.KEY_SHARE:                              TLSxxxExtension,
                     # TLSHelloExtensionType.TRANSPARENCY_INFO:                      TLSxxxExtension,
-                    # TLSHelloExtensionType.CONNECTION_ID:                          TLSxxxExtension,
+                    # TLSHelloExtensionType.CONNECTION_ID_DEPRECATED:               TLSxxxExtension,
                     # TLSHelloExtensionType.CONNECTION_ID:                          TLSxxxExtension,
                     # TLSHelloExtensionType.EXTERNAL_ID_HASH:                       TLSxxxExtension,
                     # TLSHelloExtensionType.EXTERNAL_SESSION_ID:                    TLSxxxExtension,
@@ -286,8 +289,7 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.TICKET_REQUEST:                         TLSxxxExtension,
                     # TLSHelloExtensionType.DNSSEC_CHAIN:                           TLSxxxExtension,
                     # TLSHelloExtensionType.SEQUENCE_NUMBER_ENCRYPTION_ALGORITHMS:  TLSxxxExtension,
-
-                }.get(content_type)
+                }.get(extension_type)
 
                 if parser is not None:
                     extension = parser.parse(frame, *args, **kwargs)
@@ -297,7 +299,7 @@ class TLSHelloExtension(Packet):
                 if extension is None:
                     DecodeError(f"Failed to decode TLSHelloExtension. {len} extensions decoded so far and remaining frame length was {len(frame)}")
 
-                extension.append(extension)
+                extensions.append(extension)
                 extension_len = extension.length + 4        # 2 bytes for the extn-type and 2 bytes for length field
                 frame = frame[extension_len:]
                 print(f"TLSHelloExtension: Saved extension to list: {extension}")
@@ -322,6 +324,9 @@ class TLSUnsupportedHelloExtension(TLSHelloExtension):
         super().__init__(exten_type, *args, **kwargs)
         self._payload = payload
 
+    def __repr__(self):
+        return super().__repr__() + f", Payload Length: {len(self._payload)}"
+
     def pack(self, payload: Optional[bytes] = b'') -> bytes:
         return super().pack(self._payload)
 
@@ -338,28 +343,31 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
         super().__init__(TLSHelloExtensionType.SUPPORTED_GROUPS, *args, **kwargs)
         self._supported_groups = supported_groups or []
 
+    def __repr__(self):
+        return super().__repr__() + f", Supported Groups: [{', '.join(self._supported_groups)}]"
+
     @property
     def supported_groups(self) -> Tuple[int]:
         return tuple(self._supported_groups)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSSupportedGroupsExtension', None]:
         required = 2
         extn_data_len = len(frame) - 4 - required
 
         if extn_data_len < required:
-            raise DecodeError(f"{self.__class__.__name__}: Extension truncated: Expected at least {required} bytes, got: {extn_data_len}")
+            raise DecodeError(f"TLSSupportedGroupsExtension: Extension truncated: Expected at least {required} bytes, got: {extn_data_len}")
 
         extn_type, msg_len, extn_len = struct.unpack_from("!HHH", frame)
         if extn_type != TLSHelloExtensionType.SUPPORTED_GROUPS:
-            raise DecodeError(f"{self.__class__.__name__}: Extension type is not SUPPORTED_GROUPS. Found: {extn_type}")
+            raise DecodeError(f"TLSSupportedGroupsExtension: Extension type is not SUPPORTED_GROUPS. Found: {extn_type}")
 
         if extn_len & 1:
-            raise DecodeError(f"{self.__class__.__name__}: Extension truncated: Even number of bytes expected, got: {extn_data_len}")
+            raise DecodeError(f"TLSSupportedGroupsExtension: Extension truncated: Even number of bytes expected, got: {extn_data_len}")
 
         frame = frame[6:]
         if len(frame) < extn_len:
-            raise DecodeError(f"{self.__class__.__name__}: Extension truncated: Expected at least {extn_len} bytes, got: {len(frame)}")
+            raise DecodeError(f"TLSSupportedGroupsExtension: Extension truncated: Expected at least {extn_len} bytes, got: {len(frame)}")
 
         supported_groups = [int.from_bytes(frame[offset:offset + 2], 'big') for offset in range(0, extn_len, 2)]
 
@@ -370,7 +378,7 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
         for group in self._supported_groups:
             buffer += struct.pack("!H", group)
 
-        return super().packet(buffer)
+        return super().pack(buffer)
 
 
 class TLSECPointsFormatExtension(TLSHelloExtension):
@@ -378,6 +386,7 @@ class TLSECPointsFormatExtension(TLSHelloExtension):
     TLSECPointsFormatExtension   [RFC8422]
     """
     pass
+    # TODO: support __repr__()
 
 
 class TLSSignatureAlgorithmsExtension(TLSHelloExtension):
