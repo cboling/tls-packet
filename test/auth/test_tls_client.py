@@ -57,8 +57,10 @@ class TestTLSClient(unittest.TestCase):
         for client in (self.client_v10, self.client_v11, self.client_v12):
             self.assertEqual(client.client_sequence_number, 0)
             self.assertEqual(client.server_sequence_number, 0)
-            self.assertEqual(client.security_parameters.client_random, FIXED_RANDOM)
-            self.assertIsNone(client.security_parameters.server_random)
+            self.assertEqual(client.rx_security_parameters.client_random, FIXED_RANDOM)
+            self.assertEqual(client.tx_security_parameters.client_random, FIXED_RANDOM)
+            self.assertIsNone(client.rx_security_parameters.server_random)
+            self.assertIsNone(client.tx_security_parameters.server_random)
 
             ciphers = get_cipher_suites_by_version(client.tls_version, excluded=("PSK", ))
             self.assertNotEqual(len(ciphers), 0)
@@ -66,7 +68,7 @@ class TestTLSClient(unittest.TestCase):
             self.assertEqual(client.ciphers, ciphers)
             self.assertIsNone(client.extensions)
             self.assertEqual(len(client.messages), 0)
-            self.assertIsNone(client.server_certificate)
+            self.assertIsNone(client.server_certificates)
 
 
 if __name__ == '__main__':

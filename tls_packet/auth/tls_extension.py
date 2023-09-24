@@ -132,3 +132,21 @@ class HelloExtension(Packet):
 
     def __bytes__(self) -> bytes:
         return self.pack()
+
+# WPA-Supplicant has the following
+#   ec_point_formats
+#   encrypt_then_mac
+#   extended_master_secret
+#   supported_groups
+#   signature_algorithms
+#
+# FreeRADIUS Server Hello has the following in response to WPA supplicant
+#   ec_point_formats
+#   encrypt_then_mac
+#   extended_master_secret
+#
+# FreeRADIUS Server Hello has the following in response to our program
+#   ec_point_formats
+#   encrypt_then_mac
+#   extended_master_secret
+#   renegotiation_info          *** New
