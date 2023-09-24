@@ -22,7 +22,7 @@ import sys
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import TLSCompressionMethod
 from tls_packet.auth.tls import TLSv1_2, TLSv1_3
-from tls_packet.auth.tls_extension import HelloExtension
+from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import PacketPayload, DecodeError, PARSE_ALL
 
@@ -85,7 +85,7 @@ class TLSServerHello(TLSHandshake):
                  random_data: Optional[Union[bytes, None]] = None,
                  compression: Optional[TLSCompressionMethod] = TLSCompressionMethod.NULL_METHOD,
                  session_id: Optional[int] = 0,
-                 extensions: Optional[Union[Iterable[HelloExtension], None]] = None, **kwargs):
+                 extensions: Optional[Union[Iterable[TLSHelloExtension], None]] = None, **kwargs):
         super().__init__(TLSHandshakeType.SERVER_HELLO, length=length, session=session, **kwargs)
 
         # Error checks

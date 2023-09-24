@@ -27,7 +27,7 @@ from tls_packet.auth.cipher_suites import get_cipher_suites_by_version
 from tls_packet.auth.tls import TLS, TLSv1_0, TLSv1_1, TLSv1_2, TLSv1_3
 from tls_packet.auth.tls_client import TLSClient
 from tls_packet.auth.tls_client_hello import TLSClientHello
-from tls_packet.auth.tls_extension import HelloExtension
+from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_handshake import TLSHandshake
 
 
@@ -125,7 +125,7 @@ class TestTLSClientHello(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             # TODO: Not yet supported
-            extensions = [HelloExtension(header=6, data=b'')]
+            extensions = [TLSHelloExtension(header=6, data=b'')]
             TLSClientHello(client, random_data=FIXED_RANDOM, extensions=extensions)
 
     def test_TLSClientHello_decode(self):

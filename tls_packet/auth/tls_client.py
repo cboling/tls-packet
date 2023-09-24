@@ -23,7 +23,7 @@ from tls_packet.auth.cipher_suites import CipherSuite, get_cipher_suites_by_vers
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls import TLS
 from tls_packet.auth.tls import TLSv1_2
-from tls_packet.auth.tls_extension import HelloExtension
+from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_state_machine import TLSClientStateMachine
 from tls_packet.packet import Packet
 
@@ -38,7 +38,7 @@ class TLSClient:
                  session_id: Optional[int] = 0,
                  ciphers: Optional[CipherSuiteDict] = None,
                  random_data: Optional[bytes] = None,
-                 extensions: Optional[Iterable[HelloExtension]] = None,
+                 extensions: Optional[Iterable[TLSHelloExtension]] = None,
                  certificates: Optional[Dict[str, Any]] = None,
                  keys: Optional[Dict[str, Any]] = None,
                  debug: Optional[bool] = False):

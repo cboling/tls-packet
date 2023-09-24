@@ -21,7 +21,7 @@ from typing import Union, Optional, Iterable
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.tls import TLS, TLSv1_2
-from tls_packet.auth.tls_extension import HelloExtension
+from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import PacketPayload, PARSE_ALL
 
@@ -85,7 +85,7 @@ class TLSClientHello(TLSHandshake):
                  ciphers: Optional[CipherSuite] = None,
                  compression: Optional[Iterable[int]] = (0,),
                  gmt_time: Optional[int] = 0,
-                 extensions: Optional[Iterable[HelloExtension]] = None, **kwargs):
+                 extensions: Optional[Iterable[TLSHelloExtension]] = None, **kwargs):
         super().__init__(TLSHandshakeType.CLIENT_HELLO,
                          length=length,
                          session=session, **kwargs)
