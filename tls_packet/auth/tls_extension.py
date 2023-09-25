@@ -252,8 +252,8 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.CLIENT_CERTIFICATE_TYPE:                TLSxxxExtension,
                     # TLSHelloExtensionType.SERVER_CERTIFICATE_TYPE:                TLSxxxExtension,
                     # TLSHelloExtensionType.PADDING:                                TLSxxxExtension,
-                    #TLSHelloExtensionType.ENCRYPT_THEN_MAC:                       TLSEncryptThenMacExtension,
-                    #TLSHelloExtensionType.EXTENDED_MASTER_SECRET:                 TLSExtendedMasterSecretExtension,
+                    TLSHelloExtensionType.ENCRYPT_THEN_MAC:                       TLSEncryptThenMacExtension,
+                    TLSHelloExtensionType.EXTENDED_MASTER_SECRET:                 TLSExtendedMasterSecretExtension,
                     # TLSHelloExtensionType.TOKEN_BINDING:                          TLSxxxExtension,
                     # TLSHelloExtensionType.CACHED_INFO:                            TLSxxxExtension,
                     # TLSHelloExtensionType.TLS_LTS:                                TLSxxxExtension,
@@ -292,17 +292,19 @@ class TLSHelloExtension(Packet):
                 }.get(extension_type)
 
                 if parser is not None:
-                    extension = parser.parse(frame, *args, **kwargs)
+                    extension = parser.parse(frame, *args, length=length, **kwargs)
                 else:
                     extension = TLSUnsupportedHelloExtension(extension_type, frame[4:], *args, length=length, **kwargs)
 
                 if extension is None:
                     DecodeError(f"Failed to decode TLSHelloExtension. {len} extensions decoded so far and remaining frame length was {len(frame)}")
 
+                print(f"TLSHelloExtension: Saving extension to list: {extension}")
+
                 extensions.append(extension)
                 extension_len = extension.length + 4        # 2 bytes for the extn-type and 2 bytes for length field
                 frame = frame[extension_len:]
-                print(f"TLSHelloExtension: Saved extension to list: {extension}")
+
                 print(f"TLSHelloExtension: {len(frame)} bytes remaining")
                 print(f"TLSHelloExtension: Remaining frame: {frame.hex()}")
 
@@ -338,6 +340,12 @@ class TLSUnsupportedHelloExtension(TLSHelloExtension):
 class TLSSupportedGroupsExtension(TLSHelloExtension):
     """
     TLSSupportedGroupsExtension  (renamed from "elliptic_curves") [RFC8422] [RFC7919]
+
+        RFC 4492 defined 25 different curves in the NamedCurve registry (now
+        renamed the "TLS Supported Groups" registry, although the enumeration
+        below is still named NamedCurve) for use in TLS. Only three have
+        seen much use.
+
     """
     def __init__(self, *args, supported_groups: Optional[List[int]] = None, **kwargs):
         super().__init__(TLSHelloExtensionType.SUPPORTED_GROUPS, *args, **kwargs)
@@ -384,13 +392,31 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
 class TLSECPointsFormatExtension(TLSHelloExtension):
     """
     TLSECPointsFormatExtension   [RFC8422]
+
+        Three point formats were included in the definition of ECPointFormat
+        above. This specification deprecates all but the uncompressed point
+        format. Implementations of this document MUST support the
+        uncompressed format for all of their supported curves and MUST NOT
+        support other formats for curves defined in this specification. For
+        backwards compatibility purposes, the point format list extension MAY
+        still be included and contain exactly one value: the uncompressed
+        point format (0). RFC 4492 specified that if this extension is
+        missing, it means that only the uncompressed point format is
+        supported, so interoperability with implementations that support the
+        uncompressed format should work with or without the extension.
+
+        If the client sends the extension and the extension does not contain
+        the uncompressed point format, and the client has used the Supported
+        Groups extension to indicate support for any of the curves defined in
+        this specification, then the server MUST abort the handshake and
+        return an illegal_parameter alert.
     """
     def __init__(self, *args, formats: Optional[List[ECPointsFormat]] = None, **kwargs):
         super().__init__(TLSHelloExtensionType.EC_POINT_FORMATS, *args, **kwargs)
         self._formats = formats or []
 
     def __repr__(self):
-        return super().__repr__() + f", Formats: [{', '.join(self._formats)}]"
+        return super().__repr__() + f", Formats: [{', '.join(ec_format.name() for ec_format in self._formats)}]"
 
     @property
     def formats(self) -> Tuple[int]:
@@ -427,6 +453,21 @@ class TLSECPointsFormatExtension(TLSHelloExtension):
 class TLSSignatureAlgorithmsExtension(TLSHelloExtension):
     """
     TLSSignatureAlgorithmsExtension   [RFC8446]
+
+        The signature_algorithms extension, defined in Section 7.4.1.4.1 of
+        [RFC5246], advertises the combinations of signature algorithm and
+        hash function that the client supports. The pure (non-prehashed)
+        forms of EdDSA do not hash the data before signing it. For this
+        reason, it does not make sense to combine them with a hash function
+        in the extension.
+
+        For bits-on-the-wire compatibility with TLS 1.3, we define a new
+        dummy value in the "TLS HashAlgorithm" registry that we call
+        "Intrinsic" (value 8), meaning that hashing is intrinsic to the
+        signature algorithm.
+
+        To represent ed25519 and ed448 in the signature_algorithms extension,
+        the value shall be (8,7) and (8,8), respectively.
     """
     pass
 
@@ -434,13 +475,74 @@ class TLSSignatureAlgorithmsExtension(TLSHelloExtension):
 class TLSEncryptThenMacExtension(TLSHelloExtension):
     """
     TLSEncryptThenMacExtension   [RFC7366]
+
+        The use of encrypt-then-MAC is negotiated via TLS/DTLS extensions as
+        defined in TLS [2]. On connecting, the client includes the
+        encrypt_then_mac extension in its client_hello if it wishes to use
+        encrypt-then-MAC rather than the default MAC-then-encrypt. If the
+        server is capable of meeting this requirement, it responds with an
+        encrypt_then_mac in its server_hello. The "extension_type" value for
+        this extension SHALL be 22 (0x16), and the "extension_data" field of
+        this extension SHALL be empty. The client and server MUST NOT use
+        encrypt-then-MAC unless both sides have successfully exchanged
+        encrypt_then_mac extensions.
     """
-    pass
+    def __init__(self, *args, **kwargs):
+        super().__init__(TLSHelloExtensionType.ENCRYPT_THEN_MAC, *args, **kwargs)
+
+    @staticmethod
+    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSEncryptThenMacExtension', None]:
+        extn_type, _ = struct.unpack_from("!HH", frame)
+        if extn_type != TLSHelloExtensionType.ENCRYPT_THEN_MAC:
+            raise DecodeError(f"TLSEncryptThenMacExtension: Extension type is not ENCRYPT_THEN_MAC. Found: {extn_type}")
+
+        return TLSEncryptThenMacExtension(*args, **kwargs)
 
 
 class TLSExtendedMasterSecretExtension(TLSHelloExtension):
     """
     TLSExtendedMasterSecretExtension   [RFC7627]
-    """
-    pass
 
+        When the extended master secret extension is negotiated in a full
+        handshake, the "master_secret" is computed as
+
+            master_secret = PRF(pre_master_secret, "extended master secret",
+                                session_hash)
+                                [0..47];
+
+        The extended master secret computation differs from that described in
+        [RFC5246] in the following ways:
+
+        o The "extended master secret" label is used instead of "master
+          secret".
+
+        o The "session_hash" is used instead of the "ClientHello.random" and
+          "ServerHello.random".
+
+        The "session_hash" depends upon a handshake log that includes
+        "ClientHello.random" and "ServerHello.random", in addition to
+        ciphersuites, key exchange information, and certificates (if any)
+        from the client and server. Consequently, the extended master secret
+        depends upon the choice of all these session parameters.
+
+        This design reflects the recommendation that keys should be bound to
+        the security contexts that compute them [SP800-108]. The technique
+        of mixing a hash of the key exchange messages into master key
+        derivation is already used in other well-known protocols such as
+        Secure Shell (SSH) [RFC4251].
+        
+        Clients and servers SHOULD NOT accept handshakes that do not use the
+        extended master secret, especially if they rely on features like
+        compound authentication that fall into the vulnerable cases described
+        in Section 6.1.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(TLSHelloExtensionType.EXTENDED_MASTER_SECRET, *args, **kwargs)
+
+    @staticmethod
+    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSExtendedMasterSecretExtension', None]:
+        extn_type, _ = struct.unpack_from("!HH", frame)
+        if extn_type != TLSHelloExtensionType.EXTENDED_MASTER_SECRET:
+            raise DecodeError(f"TLSExtendedMasterSecretExtension: Extension type is not EXTENDED_MASTER_SECRET. Found: {extn_type}")
+
+        return TLSExtendedMasterSecretExtension(*args, **kwargs)

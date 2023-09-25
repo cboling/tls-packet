@@ -269,7 +269,9 @@ class TLSClientStateMachine(Machine):
         """
         # frame=packet.get_layer("TLSServerHello")  <- On initial entry. Available if needed
         print(f"{self.state}: entry")
+
         print("Look at standard for what EncryptedExtensions is used for in TLSv1.2", file=sys.stderr)
+
         # Immediate transition to next state
         self.encrypted_extensions()
 

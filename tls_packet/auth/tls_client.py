@@ -306,6 +306,7 @@ class TLSClient:
 
                 except Exception as _e:
                     record_list = None
+                    raise _e
 
                 return record_list
         else:
