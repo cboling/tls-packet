@@ -18,11 +18,10 @@
 import unittest
 
 from mocks.util import assertGeneratedFrameEquals
-from tls_packet.packet import DecodeError
+from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.auth.tls_hello import TLSHelloRequest
 from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordContentType
-from tls_packet.auth.security_params import SecurityParameters
 
 
 class TestTLSHello(unittest.TestCase):
@@ -58,7 +57,7 @@ class TestTLSHello(unittest.TestCase):
         # Construct frame
         record_frame = "160301000100"
 
-        records = TLSRecord.parse(bytes.fromhex(record_frame), self.security_params)
+        records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
 
         self.assertIsNotNone(records)
         import sys

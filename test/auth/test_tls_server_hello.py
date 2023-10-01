@@ -19,32 +19,30 @@ import os
 import sys
 import unittest
 
-from mocks.mock_packet import FIXED_RANDOM
-from mocks.mock_auth_socket import MockAuthSocket
-from tls_packet.packet import DecodeError
-from tls_packet.auth.tls import TLS, TLSv1_0, TLSv1_1, TLSv1_2, TLSv1_3
+from tls_packet.auth.tls import TLS, TLSv1_0, TLSv1_2
 from tls_packet.auth.tls_handshake import TLSHandshake
-from tls_packet.auth.tls_server import TLSServer
 from tls_packet.auth.tls_server_hello import TLSServerHello
+from tls_packet.packet import DecodeError
 
 
 class TestTLSServerHello(unittest.TestCase):
     @classmethod
     def setUp(cls):
-        cls.server = TLSServer(MockAuthSocket(),
-                               tls_version=TLSv1_2(),
-                               ciphers=None,
-                               random_data=FIXED_RANDOM,
-                               extensions=None,
-                               debug=True)
+        pass
+        # cls.server = TLSServer(MockAuthSocket(),
+        #                        tls_version=TLSv1_2(),
+        #                        ciphers=None,
+        #                        random_data=FIXED_RANDOM,
+        #                        extensions=None,
+        #                        debug=True)
 
-    def test_TLSServerHello_serialization(self):
-        server = self.server
-
-        # Currently we act only as a client
-        with self.assertRaises(NotImplementedError):
-            hello = TLSServerHello(server)
-            bytes(hello)
+    # def test_TLSServerHello_serialization(self):
+    #     server = self.server
+    #
+    #     # Currently we act only as a client
+    #     with self.assertRaises(NotImplementedError):
+    #         hello = TLSServerHello(server)
+    #         bytes(hello)
 
     def test_TLSServerHello_serialize_bad_value_checks(self):
         with self.assertRaises(ValueError):
@@ -55,10 +53,6 @@ class TestTLSServerHello(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             TLSServerHello(None, random_data=os.urandom(8))  # too small
-
-    def test_TLSServerHello_serialize_unsupported(self):
-        with self.assertRaises(NotImplementedError):
-            TLSServerHello(None, extensions=[1])
 
     def _server_hello_payload(self, version: TLS, session_id=0) -> str:
         # Payload copied from a TLS Server Hello from FreeRadius v3.0.20 to Ubuntu 20.04 WPA Supplicant

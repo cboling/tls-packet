@@ -18,7 +18,6 @@
 import unittest
 
 from mocks.util import assertGeneratedFrameEquals
-
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange, TLSClientKeyEncoding
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
@@ -87,7 +86,7 @@ class TestTLSClientKeyExchange(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             # TODO: Not yet supported
-            records = TLSRecord.parse(bytes.fromhex(record_frame), self.security_params)
+            records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
 
             self.assertIsNotNone(records)
             self.assertIsInstance(records, list)

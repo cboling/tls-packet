@@ -17,9 +17,11 @@
 
 import unittest
 
+from mocks.mock_packet import FIXED_RANDOM
 from mocks.util import assertGeneratedFrameEquals
-
+from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.auth.tls import TLSv1
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordContentType
 from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange, ECCurveType, NamedCurve
@@ -28,7 +30,20 @@ from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange, ECCurv
 class TestTLSServerKeyExchange(unittest.TestCase):
     @classmethod
     def setUp(cls):
-        cls.security_params = SecurityParameters()
+
+        # tls_version: Optional[TLS] = None,
+        # prf_algorithm: Optional[bytes] = None,  # PRFAlgorithm
+        # compression_algorithm: Optional[TLSCompressionMethod] = TLSCompressionMethod.NULL_METHOD,
+        # master_secret: Optional[bytes] = None,
+        # client_random: Optional[bytes] = None,
+        # server_random: Optional[bytes] = None,
+        # server_public_key: Optional[bytes] = None,
+        # server_certificate: Optional[Certificate] = None,
+        # cipher_suite: Optional['CipherSuite'] = None):
+        cipher_suite = CipherSuite.get_from_id(TLSv1(), 0xC014)
+
+        cls.security_params = SecurityParameters(tls_version=TLSv1(), cipher_suite=cipher_suite,
+                                                 client_random=FIXED_RANDOM, server_random=FIXED_RANDOM)
         cls.curve_type = ECCurveType.NAMED_CURVE
         cls.named_curve = NamedCurve.SECP256R1
         cls.pubkey = "04ceea15247ac22f63d9393d1a160fe67e1962d173a2b75f7fc393fc721467b264d47c1a1915c4f2d29c8d2152b511bfafceb6dddb7ccf9967be094533c1731275"
@@ -114,7 +129,7 @@ class TestTLSServerKeyExchange(unittest.TestCase):
         # Construct frame
         record_frame = "160301014b0c0001470300174104ceea15247ac22f63d9393d1a160fe67e1962d173a2b75f7fc393fc721467b264d47c1a1915c4f2d29c8d2152b511bfafceb6dddb7ccf9967be094533c17312750100d378956fca3ba101b8b95189f254f867e4ab5b28a9d1f9481bffdae051a5fea39d036d8b1121719faf3dfa8aa45f755e5c174b5e606778fc27638f99f71cab86e84b730967897d5f12a3fe152dd06c5569cdb624f0ef3f4a8100e0aa3ebdce6c5395d5823a0b39ba066e5c462e6bc442d01b1c5840943ec0023aedcecde8277651b29beed36ec06495602ce03d68b100ca80217aebe1eae38a6054209980053c50196e5d25cab3f3a53a0ac2738042ea5ed966e00a68da5a3f7300faf39f89f949df19648220a81eef1e6bb05a588e8138145b4ee84436b534fd011dad694680d7344af86e9a5ca4ad54839487fb09c8a780be055578f79e6f4d73a4aa05939a"
 
-        records = TLSRecord.parse(bytes.fromhex(record_frame), self.security_params)
+        records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
 
         self.assertIsNotNone(records)
         self.assertIsInstance(records, list)

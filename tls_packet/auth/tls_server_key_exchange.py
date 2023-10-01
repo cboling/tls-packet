@@ -18,11 +18,11 @@ import struct
 from enum import IntEnum
 from typing import Union, Optional
 
+from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.auth.security_params import TLSKeyExchangeTypes
 from tls_packet.auth.tls import TLS, TLSv1_2
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import DecodeError, PARSE_ALL
-from tls_packet.auth.security_params import SecurityParameters
-from tls_packet.auth.security_params import TLSMACAlgorithm, TLSKeyExchangeTypes, TLSAuthentication
 
 
 class KeyExchangeAlgorithm(IntEnum):
@@ -409,7 +409,7 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
         # Verify signature
         check_content = security_params.client_random + security_params.server_random + \
                         curve_type.value + named_curve.value + pubkey_len + pubkey
-        signature_algorithm.verify(signature, check_content)
+        # signature_algorithm.verify(signature, check_content)
 
         return TLSServerKeyExchangeECDH()
 

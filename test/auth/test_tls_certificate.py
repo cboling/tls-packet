@@ -18,7 +18,6 @@
 import unittest
 
 from mocks.util import assertGeneratedFrameEquals
-
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert, ASN_1_CertList
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
@@ -147,7 +146,7 @@ class TestTLSCertificate(unittest.TestCase):
 
     def test_RecordDecode(self):
         # Construct frame
-        records = TLSRecord.parse(bytes.fromhex(_test_record), self.security_params)
+        records = TLSRecord.parse(bytes.fromhex(_test_record), security_params=self.security_params)
 
         self.assertIsNotNone(records)
         self.assertIsInstance(records, list)

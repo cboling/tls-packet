@@ -16,14 +16,15 @@
 
 import copy
 import os
-
-from enum import IntEnum
 from datetime import datetime
+from enum import IntEnum
 from typing import Optional
 
 from cryptography.x509 import Certificate
 
-from tls_packet.auth.tls import TLS, TLSv1_2
+from tls_packet.auth.tls import TLS
+
+
 #from tls_packet.auth.cipher_suites import CipherSuite
 
 class TLSCompressionMethod(IntEnum):
@@ -125,7 +126,7 @@ class SecurityParameters:
         # Desired ones
         client_random = client_random or int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
 
-        self.tls_version = tls_version or TLSv1_2()
+        self.tls_version = tls_version
         self.prf_algorithm = prf_algorithm
         self.compression_algorithm = compression_algorithm
         self.master_secret = master_secret
@@ -162,7 +163,7 @@ class SecurityParameters:
                 raise KeyError(f"SecurityParameters does not have the attribute '{key}")
 
             existing = getattr(dup, key)
-            if not isinstance(value, type(existing)):
+            if not isinstance(value, type(existing)) and existing is not None:
                 raise ValueError(f"SecurityParameters attribute '{key}' is of type '{type(existing)}. '{value}/{type(value)} provided")
 
             setattr(dup, key, value)

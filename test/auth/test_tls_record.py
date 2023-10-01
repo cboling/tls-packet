@@ -18,7 +18,6 @@
 import unittest
 
 from mocks.util import assertGeneratedFrameEquals
-
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_record import TLSRecordContentType, TLSRecord, TLSChangeCipherSpecRecord
 from tls_packet.packet import DecodeError
@@ -52,27 +51,27 @@ class TestTLSRecord(unittest.TestCase):
     def test_TLSRecordDecodeErrors(self):
         with self.assertRaises(DecodeError):
             frame = None
-            TLSRecord.parse(frame, self.security_params)
+            TLSRecord.parse(frame, security_params=self.security_params)
 
         with self.assertRaises(DecodeError):    # Empty
             frame = ""
-            TLSRecord.parse(bytes.fromhex(frame), self.security_params)
+            TLSRecord.parse(bytes.fromhex(frame), security_params=self.security_params)
 
         with self.assertRaises(DecodeError):    # Truncated
             frame = "1603010001"
-            TLSRecord.parse(bytes.fromhex(frame), self.security_params)
+            TLSRecord.parse(bytes.fromhex(frame), security_params=self.security_params)
 
         with self.assertRaises(DecodeError):    # Invalid content type
             frame = "110301000100"
-            TLSRecord.parse(bytes.fromhex(frame), self.security_params)
+            TLSRecord.parse(bytes.fromhex(frame), security_params=self.security_params)
 
         with self.assertRaises(DecodeError):    # Bad TLS version
             frame = "160201000100"
-            TLSRecord.parse(bytes.fromhex(frame), self.security_params)
+            TLSRecord.parse(bytes.fromhex(frame), security_params=self.security_params)
 
         with self.assertRaises(DecodeError):    # Handshake failed inside the record
             frame = "1602010001FF"
-            TLSRecord.parse(bytes.fromhex(frame), self.security_params)
+            TLSRecord.parse(bytes.fromhex(frame), security_params=self.security_params)
 
 
 class TestTLSChangeCipherSpec(unittest.TestCase):
@@ -95,7 +94,7 @@ class TestTLSChangeCipherSpec(unittest.TestCase):
 
         with self.assertRaises(NotImplementedError):
             # TODO Add support
-            records = TLSRecord.parse(bytes.fromhex(record_frame), self.security_params)
+            records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
 
             self.assertIsNotNone(records)
             self.assertIsInstance(records, list)
@@ -105,6 +104,7 @@ class TestTLSChangeCipherSpec(unittest.TestCase):
             self.assertIsInstance(record, TLSChangeCipherSpecRecord)
             self.assertEqual(record.content_type, TLSRecordContentType.CHANGE_CIPHER_SPEC)
             self.assertEqual(record.data.hex(), self.change_data)
+
 
 if __name__ == '__main__':
     unittest.main()

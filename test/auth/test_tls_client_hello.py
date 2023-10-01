@@ -22,12 +22,11 @@ import unittest
 from mocks.mock_auth_socket import MockAuthSocket
 from mocks.mock_packet import FIXED_RANDOM
 from mocks.util import assertGeneratedFrameEquals
-
-from tls_packet.auth.cipher_suites import get_cipher_suites_by_version
+from tls_packet.auth.cipher_suites import CipherSuite
+from tls_packet.auth.security_params import TLSKeyExchangeTypes
 from tls_packet.auth.tls import TLS, TLSv1_0, TLSv1_1, TLSv1_2, TLSv1_3
 from tls_packet.auth.tls_client import TLSClient
 from tls_packet.auth.tls_client_hello import TLSClientHello
-from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_handshake import TLSHandshake
 
 
@@ -44,8 +43,9 @@ class TestTLSClientHello(unittest.TestCase):
 
     @staticmethod
     def _client_hello_payload(version: TLS) -> str:
-        all = get_cipher_suites_by_version(TLSv1_2(), excluded=("PSK", ))
-        ciphers = [cipher["id"] for cipher in all.values()]
+        excluded = (TLSKeyExchangeTypes.DHE_PSK, TLSKeyExchangeTypes.ECDHE_PSK, TLSKeyExchangeTypes.RSA_PSK)
+        all_ciphers = CipherSuite.get_cipher_suites_by_version(TLSv1_2(), excluded=excluded)
+        ciphers = [k for k in all_ciphers.keys()]
 
         version_data = bytes(version)
         hello_data = f"{version_data.hex()}"
@@ -119,14 +119,6 @@ class TestTLSClientHello(unittest.TestCase):
             print(f"Session ID: {session_id}", file=sys.stderr)
             with self.assertRaises(ValueError):
                 TLSClientHello(client, random_data=FIXED_RANDOM, session_id=session_id)
-
-    def test_TLSClientHello_serialization_extensions_not_supported(self):
-        client = TLSClient(MockAuthSocket(), random_data=FIXED_RANDOM)
-
-        with self.assertRaises(NotImplementedError):
-            # TODO: Not yet supported
-            extensions = [TLSHelloExtension(header=6, data=b'')]
-            TLSClientHello(client, random_data=FIXED_RANDOM, extensions=extensions)
 
     def test_TLSClientHello_decode(self):
         # Currently we act only as a client

@@ -18,7 +18,7 @@ import struct
 from enum import IntEnum
 from typing import Union, Optional, List
 
-from tls_packet.auth.security_params import SecurityParameters, TLSCompressionMethod
+from tls_packet.auth.security_params import TLSCompressionMethod
 from tls_packet.auth.tls import TLS, TLSv1_0
 from tls_packet.packet import Packet, PacketPayload, DecodeError, PARSE_ALL
 
@@ -233,7 +233,7 @@ class TLSChangeCipherSpecRecord(TLSRecord):
 
     @staticmethod
     def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL,
-              compression: Optional[TLSCompressionMethod] = TLSCompressionMethod.NULL_METHOD) -> Union['TLSChangeCipherSpecRecord', None]:
+              **kwargs) -> Union['TLSChangeCipherSpecRecord', None]:
         raise NotImplementedError("Not yet implemented")
 
 
