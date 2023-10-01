@@ -139,8 +139,8 @@ class TLSClientHello(TLSHandshake):
 
         # Add the ciphers supported. 2 bytes per cipher ID
         buffer += struct.pack("!H", 2 * len(self.ciphers))
-        for cipher in self.ciphers.values():
-            buffer += struct.pack("!H", cipher["id"])
+        for cipher in self.ciphers.keys():
+            buffer += struct.pack("!H", cipher)
 
         # Add the compression methods supported
         buffer += struct.pack("!B", len(self.compression))

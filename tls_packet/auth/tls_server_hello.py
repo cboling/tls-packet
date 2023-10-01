@@ -19,6 +19,7 @@ import struct
 from typing import Union, Optional, Iterable
 import sys
 
+from tls_packet.auth.tls import TLS
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import TLSCompressionMethod
 from tls_packet.auth.tls import TLSv1_2, TLSv1_3
@@ -63,6 +64,8 @@ from tls_packet.packet import PacketPayload, DecodeError, PARSE_ALL
 class TLSServerHello(TLSHandshake):
     """
     TLS Server Hello Message
+
+    Supported Versions:  1.0, 1.1, 1.2
 
     struct {
           ProtocolVersion server_version;
@@ -154,14 +157,42 @@ class TLSServerHello(TLSHandshake):
         session_id, cipher, compression, extension_length = struct.unpack_from("!BHBH", frame, offset)
         offset += 6
         compression = TLSCompressionMethod(compression)
+
+        # RFC 2246 (TLS v1.0) does not support extensions, but were added in RFC 3546
         extensions = TLSHelloExtension.parse(frame[offset:offset + extension_length]) if extension_length else None
-        # offset += extension_length
 
         if session_id > 32:
             raise DecodeError(f"TLSServerHello: SessionID is an opaque value: 0..32, found, {session_id}")
 
+        version = TLS.get_by_code(version)
+
+        print()
+        print(f"Server Hello Received:")
+        print(f" Version    : {version}")
+        print(f" Random Data: {random_data.hex()}")
+        print(f" Session ID : {session_id}")
+        print(f" Cipher     : {cipher:#04x}")
+        print(f" Compression: {compression}")
+        print(f" Extensions : {extensions}")
+        print()
+
+        # Update any kwargs['security_params'] with any learned information in case all the server records have
+        # been sent at once (most common case).  They are also updated again later by the client state machine
+        # when various records are parsed.
+        security_params = kwargs.get("security_params")
+
+        if security_params:
+            security_params.tls_version = version               # TODO: Make these set routines 'safe' just like the copy
+            security_params.server_random = random_data
+            security_params.compression_algorithm = compression
+
+            security_params.cipher_suite = CipherSuite.get_from_id(version, cipher)
+
+            if security_params.cipher_suite is None:
+                raise DecodeError(f"ServerHello: Unsupported cipher suite selected: {cipher:#04x}")
+
         return TLSServerHello(None, cipher, version=version, length=msg_len, random_data=random_data, compression=compression,
-                              session_id=session_id, extensions=extensions, original_frame=frame, **kwargs)  # TODO: later ->  , extensions = extensions)
+                              session_id=session_id, extensions=extensions, original_frame=frame, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

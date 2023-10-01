@@ -21,38 +21,6 @@ from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import DecodeError, PARSE_ALL
 
 
-# https://www.ietf.org/rfc/rfc5246.txt
-#
-#             The Transport Layer Security (TLS) Protocol
-#                            Version 1.2
-#
-# Handshake Protocol
-#
-#      Client                                               Server
-#
-#      ClientHello                  -------->
-#                                                      ServerHello
-#                                                     Certificate*
-#                                               ServerKeyExchange*
-#                                              CertificateRequest*
-#                                   <--------      ServerHelloDone
-#      Certificate*
-#      ClientKeyExchange
-#      CertificateVerify*
-#      [ChangeCipherSpec]
-#      Finished                     -------->
-#                                               [ChangeCipherSpec]
-#                                   <--------             Finished
-#      Application Data             <------->     Application Data
-#
-#    The TLS Handshake Protocol is one of the defined higher-level clients
-#    of the TLS Record Protocol.  This protocol is used to negotiate the
-#    secure attributes of a session.  Handshake messages are supplied to
-#    the TLS record layer, where they are encapsulated within one or more
-#    TLSPlaintext structures, which are processed and transmitted as
-#    specified by the current active session state.
-
-
 class CertificateType(IntEnum):
     """
       enum {
@@ -86,6 +54,8 @@ class CertificateType(IntEnum):
 class TLSCertificateRequest(TLSHandshake):
     """
     TLS Certificate Message
+
+      Supported Versions: 1.0, 1.1, 1.2
 
        A non-anonymous server can optionally request a certificate from
        the client, if appropriate for the selected cipher suite.  This

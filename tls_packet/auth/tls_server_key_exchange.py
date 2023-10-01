@@ -18,8 +18,31 @@ import struct
 from enum import IntEnum
 from typing import Union, Optional
 
+from tls_packet.auth.tls import TLS, TLSv1_2
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import DecodeError, PARSE_ALL
+from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.auth.security_params import TLSMACAlgorithm, TLSKeyExchangeTypes, TLSAuthentication
+
+
+class KeyExchangeAlgorithm(IntEnum):
+    """
+
+    """
+    DHE_DSS = 1
+    DHE_RSA = 2
+    DH_ANON = 3
+    RSA     = 4
+    DH_DSS  = 5
+    DH_RSA  = 6
+
+
+    def name(self) -> str:
+        return super().name.replace("_", " ").capitalize()
+
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
 
 
 class ECCurveType(IntEnum):
@@ -78,6 +101,7 @@ class NamedCurve(IntEnum):
     def has_value(cls, val: int) -> bool:
         return val in cls._value2member_map_
 
+
 class ECPointsFormat(IntEnum):		# TODO: Move to own file
 
     UNCOMPRESSED = 0
@@ -90,6 +114,25 @@ class ECPointsFormat(IntEnum):		# TODO: Move to own file
     @classmethod
     def has_value(cls, val: int) -> bool:
         return val in cls._value2member_map_
+
+
+class KeyExchange:
+    """ Base class to support various key exchange (calculation) mechanisms """
+    def __init__(self, session: 'TLSClient'):
+        params = session.tx_security_parameters()
+
+        self.tls_version = session.tls_session
+        self.client_random = params.client_random
+        self.server_random = params.server_random
+
+        self.server_certificate = server_cert
+        self.signature_algorithm = signature_algorithm
+
+    def parse(self, params_bytes):
+        pass
+
+    def exchange(self):
+        pass
 
 
 class TLSServerKeyExchange(TLSHandshake):
@@ -247,6 +290,61 @@ class TLSServerKeyExchange(TLSHandshake):
                  public_key: bytes, signature: bytes, *args, **kwargs):
         super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
 
+    @property
+    def public_key(self) -> bytes:
+        return self._public_key
+
+    @property
+    def signature(self) -> bytes:
+        return self._signature
+
+    @staticmethod
+    def parse(frame: bytes, *args,
+              **kwargs) -> Union[TLSHandshake, None]:
+        """ Frame to TLSServerKeyExchange """
+
+        # type(1) + length(3) + remainder based on key algorithm
+        required = 1 + 3
+        frame_len = len(frame)
+
+        if frame_len < required:
+            raise DecodeError(f"TLSServerKeyExchange: message truncated: Expected at least {required} bytes, got: {frame_len}")
+
+        msg_type = TLSHandshakeType(frame[0])
+        if msg_type != TLSHandshakeType.SERVER_KEY_EXCHANGE:
+            raise DecodeError(f"TLSServerKeyExchange: Message type is not SERVER_KEY_EXCHANGE. Found: {msg_type}")
+
+        msg_len = int.from_bytes(frame[1:4], 'big')
+        frame = frame[:msg_len + 4]  # Restrict the frame to only these bytes
+        offset = 4
+
+        security_params: SecurityParameters = kwargs.get('security_params')
+        key_exchange_type = security_params.cipher_suite.key_exchange_type
+
+        if frame_len - offset < msg_len:
+            raise DecodeError(f"TLSServerKeyExchange: Key Exchange message truncated: Expected at least {msg_len} bytes, got: {frame_len - offset}")
+
+        if key_exchange_type == TLSKeyExchangeTypes.RSA:
+            return TLSServerKeyExchangeRSA.parse(frame[4:], *args, **kwargs)
+
+        elif key_exchange_type == TLSKeyExchangeTypes.DHE:
+            return TLSServerKeyExchangeDH.parse(frame[4:], *args, **kwargs)
+
+        elif key_exchange_type == TLSKeyExchangeTypes.ECDHE:
+            return TLSServerKeyExchangeECDH.parse(frame[4:], *args, **kwargs)
+
+        raise DecodeError(f"Unsupported Key Exchange Type: {key_exchange_type}")
+
+    def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
+        raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
+
+
+class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
+
+    def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
+                 public_key: bytes, signature: bytes, *args, **kwargs):
+        super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
+
         self._curve_type = curve_type
         self._named_curve = named_curve
         self._public_key = public_key
@@ -269,11 +367,92 @@ class TLSServerKeyExchange(TLSHandshake):
         return self._signature
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, *args,
+              tls_version: Optional[TLS] = None,
+              max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+        """ Frame to TLSServerKeyExchange """
+        security_params = kwargs.get("security_params")
+
+        curve_type = ECCurveType(frame[0])
+        named_curve = NamedCurve(struct.unpack_from("!H", frame, 1)[0])
+        offset = 3
+        pubkey_len = frame[offset]
+        offset += 1
+        if offset + pubkey_len + 2 > len(frame):
+            raise DecodeError("TLSServerKeyExchange: message truncated. Unable to extract public key and/or signature length")
+
+        pubkey = frame[offset:offset + pubkey_len]
+        offset += pubkey_len
+
+        if security_params and security_params.tls_version >= TLSv1_2():
+            # TODO: Incorporate this
+            pass  # signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
+                   #    frame[offset], self.server_cert.public_key()), data_bytes[2:]
+        else:
+             pass  # signature_algorithm = signature_algorithms.RsaPkcs1Md5Sha1(self.server_cert.public_key())
+
+        sig_len = struct.unpack_from("!H", frame, offset)[0]
+        offset += 2
+        if offset + sig_len > len(frame):
+            raise DecodeError("TLSServerKeyExchange: message truncated. Unable to extract signature")
+
+        signature = frame[offset:offset + sig_len]
+
+        print()
+        print(f"Server Key Exchange Received:")
+        print(f" Curve Type  : {curve_type}")
+        print(f" Named Curve : {named_curve}")
+        print(f" Pubkey      : ({pubkey_len}): {pubkey.hex()}")
+        print(f" Signature   : ({sig_len}): {signature.hex()}")
+        print()
+
+        # Verify signature
+        check_content = security_params.client_random + security_params.server_random + \
+                        curve_type.value + named_curve.value + pubkey_len + pubkey
+        signature_algorithm.verify(signature, check_content)
+
+        return TLSServerKeyExchangeECDH()
+
+
+    def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
+        raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
+
+
+class TLSServerKeyExchangeDH(KeyExchange):
+
+    def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
+                 public_key: bytes, signature: bytes, *args, **kwargs):
+        super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
+
+        self._curve_type = curve_type
+        self._named_curve = named_curve
+        self._public_key = public_key
+        self._signature = signature
+
+    @property
+    def curve_type(self) -> ECCurveType:
+        return self._curve_type
+
+    @property
+    def named_curve(self) -> NamedCurve:
+        return self._named_curve
+
+    @property
+    def public_key(self) -> bytes:
+        return self._public_key
+
+    @property
+    def signature(self) -> bytes:
+        return self._signature
+
+    @staticmethod
+    def parse(frame: bytes, *args,
+              tls_version: Optional[TLS] = None,
+              max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
 
         # type(1) + length(3) + curve_type(1) + named_curve(2) + pubkey len (1) + pubkey (0..n) + signature len (2) + signature (0..n)
-        required = 1 + 3 + 1 + 2 + 1 + 2
+        required = 1 + 3
         frame_len = len(frame)
 
         if frame_len < required:
@@ -285,41 +464,59 @@ class TLSServerKeyExchange(TLSHandshake):
 
         msg_len = int.from_bytes(frame[1:4], 'big')
         frame = frame[:msg_len + 4]  # Restrict the frame to only these bytes
+        offset = 4
 
-        curve_type = ECCurveType(frame[4])
-        named_curve = NamedCurve(struct.unpack_from("!H", frame, 5)[0])
+        if frame_len - offset < msg_len:
+            raise DecodeError(f"TLSServerKeyExchange: Key Exchange message truncated: Expected at least {msg_len} bytes, got: {frame_len - offset}")
 
-        pubkey_len = frame[7]
-        offset = 8
-        if offset + pubkey_len + 2 > len(frame):
-            raise DecodeError("TLSServerKeyExchange: message truncated. Unable to extract public key and/or signature length")
+        pass
+        pass
+        pass
+        pass
+        pass
+        pass
+        pass
+        pass
 
-        pubkey = frame[offset:offset + pubkey_len]
-        offset += pubkey_len
 
-        sig_len = struct.unpack_from("!H", frame, offset)[0]
-        offset += 2
-        if offset + sig_len > len(frame):
-            raise DecodeError("TLSServerKeyExchange: message truncated. Unable to extract signature")
+    def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
+        raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
 
-        signature = frame[offset:offset + sig_len]
+
+class TLSServerKeyExchangeRSA(KeyExchange):
+
+    def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
+                 public_key: bytes, signature: bytes, *args, **kwargs):
+        super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
+
+        self._curve_type = curve_type
+        self._named_curve = named_curve
+        self._public_key = public_key
+        self._signature = signature
+
+    @property
+    def curve_type(self) -> ECCurveType:
+        return self._curve_type
+
+    @property
+    def named_curve(self) -> NamedCurve:
+        return self._named_curve
+
+    @property
+    def public_key(self) -> bytes:
+        return self._public_key
+
+    @property
+    def signature(self) -> bytes:
+        return self._signature
+
+    @staticmethod
+    def parse(frame: bytes, *args,
+              tls_version: Optional[TLS] = None,
+              max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+        """ Frame to TLSServerKeyExchange """
 
         return TLSServerKeyExchange(curve_type, named_curve, pubkey, signature, *args, length=msg_len, original_frame=frame, **kwargs)
-
-        # TODO: In another client, they had the cipher suite parse this message
-
-        # TODO: In other client, it created cipher suite with
-        # self.cipher_suite = CipherSuite.get_from_id(self.tls_version, self.client_random, self.server_random,
-        #                                             self.server_certificate, server_cipher_suite)
-        # And used it supported the parse_key_exchange method
-        #
-        # if self.is_server_key_exchange:  # Server key exchange
-        #     self.cipher_suite.parse_key_exchange_params(next_bytes)
-        #
-        #  key_exchange below is  ECDH, DH, or RSA
-        #
-        # def parse_key_exchange_params(self, params_bytes):
-        #     self.key_exchange.parse_params(params_bytes)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

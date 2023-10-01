@@ -21,6 +21,10 @@ from enum import IntEnum
 from datetime import datetime
 from typing import Optional
 
+from cryptography.x509 import Certificate
+
+from tls_packet.auth.tls import TLS, TLSv1_2
+#from tls_packet.auth.cipher_suites import CipherSuite
 
 class TLSCompressionMethod(IntEnum):
     """ TLS Record compression (RFC 3749) """
@@ -38,10 +42,34 @@ class TLSMACAlgorithm(IntEnum):
     HMAC_SHA1 = 2
     HMAC_SHA256 = 3
     HMAC_SHA384 = 4
-    HMAC_SHA512 = 4
+    HMAC_SHA512 = 5
+    HMAC_AEAD = 6
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
+
+
+class TLSKeyExchangeTypes(IntEnum):
+    ANY = 0
+    RSA = 1
+    DHE = 2
+    ECDHE = 3
+
+    PSK = 4
+    RSA_PSK = 5
+    DHE_PSK = 6
+    ECDHE_PSK = 7
+
+    def name(self) -> str:
+        return super().name.replace("_", " ").capitalize()
+
+
+class TLSAuthentication(IntEnum):
+    ANY = 0
+    RSA = 1
+    DHE = 2
+    ECDSA = 4
+
 
 
 class SecurityParameters:
@@ -84,38 +112,28 @@ class SecurityParameters:
     """
 
     def __init__(self,
+                 tls_version: Optional[TLS] = None,
                  prf_algorithm: Optional[bytes] = None,  # PRFAlgorithm
-                 bulk_cipher_algorithm: Optional[bytes] = None,  # BulkCipherAlgorithm
-                 cipher_type: Optional[bytes] = None,  # CipherType
-                 enc_key_length: Optional[int] = 0,
-                 block_length: Optional[int] = 0,
-                 fixed_iv_length: Optional[int] = 0,
-                 record_iv_length: Optional[int] = 0,
-                 mac_algorithm: Optional[TLSMACAlgorithm] = TLSMACAlgorithm.NULL,
-                 mac_length: Optional[int] = 0,
-                 mac_key_length: Optional[int] = 0,
                  compression_algorithm: Optional[TLSCompressionMethod] = TLSCompressionMethod.NULL_METHOD,
                  master_secret: Optional[bytes] = None,
                  client_random: Optional[bytes] = None,
-                 server_random: Optional[bytes] = None):
+                 server_random: Optional[bytes] = None,
+                 server_public_key: Optional[bytes] = None,
+                 server_certificate: Optional[Certificate] = None,
+                 cipher_suite: Optional['CipherSuite'] = None):
 
         # Desired ones
         client_random = client_random or int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
 
+        self.tls_version = tls_version or TLSv1_2()
         self.prf_algorithm = prf_algorithm
-        self.bulk_cipher_algorithm = bulk_cipher_algorithm
-        self.cipher_type = cipher_type
-        self.enc_key_length = enc_key_length
-        self.block_length = block_length
-        self.fixed_iv_length = fixed_iv_length
-        self.record_iv_length = record_iv_length
-        self.mac_algorithm = mac_algorithm
-        self.mac_length = mac_length
-        self.mac_key_length = mac_key_length
         self.compression_algorithm = compression_algorithm
         self.master_secret = master_secret
         self.client_random = client_random
         self.server_random = server_random
+        self.server_public_key = server_public_key
+        self.server_certificate = server_certificate
+        self.cipher_suite = cipher_suite
 
         # Ones from ssl book - TODO  Get rid of these
         # self.active_cipher_suite: Union[CipherSuite, None] = None

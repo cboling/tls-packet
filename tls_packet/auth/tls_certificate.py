@@ -245,6 +245,8 @@ class TLSCertificate(TLSHandshake):
     """
     TLS Certificate Message
 
+      Supported Versions: 1.0, 1.1, 1.2
+
       The server MUST send a Certificate message whenever the agreed-
       upon key exchange method uses certificates for authentication
       (this includes all key exchange methods defined in this document
@@ -309,6 +311,30 @@ class TLSCertificate(TLSHandshake):
         offset = 4
 
         certificates = ASN_1_CertList.parse(frame[offset:offset + msg_len])
+
+        for index, certificate in enumerate(certificates.certificate_list):
+            print(f"Certificate {index + 1} of {len(certificates.certificate_list)}")
+
+            x509_cert = certificate.x509_certificate
+            print(f"    not_valid_after         :  {x509_cert.not_valid_after}")
+            print(f"    not_valid_before        :  {x509_cert.not_valid_before}")
+            print(f"    signature               :  {x509_cert.signature.hex()}")
+            print(f"    signature_algorithm_oid :  {x509_cert.signature_algorithm_oid}")
+            print(f"    signature_hash_algorithm:  {x509_cert.signature_hash_algorithm}")
+            print(f"    issuer                  :  {x509_cert.issuer}")
+            print(f"    subject                 :  {x509_cert.subject}")
+            print(f"    extensions              :  {x509_cert.extensions}")
+            print(f"    tbs_certificate_bytes   :  {x509_cert.tbs_certificate_bytes.hex()}")
+            print(f"    version                 :  {x509_cert.version}")
+            print()
+
+        # Update any kwargs['security_params'] with any learned information in case all the server records have
+        # been sent at once (most common case).  They are also updated again later by the client state machine
+        # when various records are parsed.
+
+        security_params = kwargs.get("security_params")
+        if security_params is not None and certificates.certificate_list:
+            security_params.server_public_certificate = certificates.certificate_list[0].x509_certificate
 
         return TLSCertificate(certificates, length=msg_len, *args, **kwargs, original_frame=frame)  # TODO: later ->  , extensions = extensions)
 

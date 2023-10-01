@@ -20,6 +20,7 @@ from typing import Optional, Tuple, List, Any, Union
 from transitions import Machine, State
 from transitions.extensions import GraphMachine
 
+from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters, TLSCompressionMethod
 from tls_packet.auth.tls_server_hello import TLSServerHello
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert
@@ -124,12 +125,12 @@ class TLSClientStateMachine(Machine):
         {"trigger": "close", "source": "*", "dest": CLOSE},
     ]
 
-    def __init__(self, session: 'TLSClient', verify_cerver_certificate: Optional[bool] = False):
+    def __init__(self, session: 'TLSClient', verify_server_certificate: Optional[bool] = False):
         super().__init__(model=self, states=self.STATES, transitions=self.TRANSITIONS,
                          queued=True, initial=self.INITIAL, ignore_invalid_triggers=False)
         self._session = session
         self._closed = False
-        self._verify_server_certificate = verify_cerver_certificate
+        self._verify_server_certificate = verify_server_certificate
         self._k_send = ""  # Make IntEnum
         self._k_recv = ""  # Make IntEnum
 
@@ -177,13 +178,11 @@ class TLSClientStateMachine(Machine):
     def session(self) -> 'TLSClient':
         return self._session
 
-    @property
-    def rx_security_parameters(self) -> SecurityParameters:
-        return self._session.rx_security_parameters
+    def rx_security_parameters(self, active: Optional[bool] = True) -> SecurityParameters:
+        return self._session.rx_security_parameters(active=active)
 
-    @property
-    def tx_security_parameters(self) -> SecurityParameters:
-        return self._session.tx_security_parameters
+    def tx_security_parameters(self, active: Optional[bool] = True) -> SecurityParameters:
+        return self._session.tx_security_parameters(active=active)
 
     def using_psk(self, *args, **kwargs) -> bool:
         print(f"TLSClientStateMachine: 'using_psk' condition is currently hardcoded to 'False'")
@@ -237,25 +236,29 @@ class TLSClientStateMachine(Machine):
         hello = kwargs.pop("frame", None)
         if isinstance(hello, TLSServerHello):
             # Save security parameters from the hello
-            rx_parms = self.rx_security_parameters
-            tx_parms = self.tx_security_parameters
+            rx_parms = self.rx_security_parameters(active=False)
+            tx_parms = self.tx_security_parameters(active=False)
 
             # TODO: Encode what we can. Many are done in following records
-            cipherSuite = hello.cipher_suite  # CipherSuite
+            cipherSuite = CipherSuite.get_from_id(self.session.tls_version, hello.cipher_suite)
 
-            # security_parameters.prf_algorithm = .  # PRFAlgorithm
-            # security_parameters.bulk_cipher_algorithm = .  # BulkCipherAlgorithm
-            # security_parameters.cipher_type = .  # CipherType
-            # security_parameters.enc_key_length = .  # int
-            # security_parameters.block_length = .  # int
-            # security_parameters.fixed_iv_length = .  # int
-            # security_parameters.record_iv_length = .  # int
-            # security_parameters.mac_algorithm = .  # TLSMACAlgorithm
-            # security_parameters.mac_length = .  # int
-            # security_parameters.mac_key_length = .  # int
+            # self.cipher_suite = CipherSuite.get_from_id(self.tls_version, self.client_random, self.server_random,
+            #                                             self.server_certificate, server_cipher_suite)
 
+            if cipherSuite is None:
+                print(f"ServerHello: Unsupported cipher suite selected: {hello.cipher_suite:#04x}")
+                self.close()    # TODO : handle this better
+                return
+
+            rx_parms.cipher_suite = tx_parms.cipher_suite = cipherSuite
             tx_parms.compression_algorithm = rx_parms.compression_algorithm = hello.compression_method  # TLSCompressionMethod
             tx_parms.server_random = rx_parms.server_random = hello.random_bytes
+
+            if not self._session.set_tls_version(hello.version):
+                print(f"Server TLS Version {hello.version} is not supported", file=sys.stderr)
+                # TODO: Do we send an alert
+                self.close()
+                return
 
             if hello.compression_method != TLSCompressionMethod.NULL_METHOD:
                 raise NotImplementedError("Server wants compression but we do not support it yet")
@@ -266,11 +269,11 @@ class TLSClientStateMachine(Machine):
         """
             {"trigger": "encrypted_extensions", "source": WAIT_EE, "dest": WAIT_FINISHED, "conditions": "using_psk"},
             {"trigger": "encrypted_extensions", "source": WAIT_EE, "dest": WAIT_CERT_CR, "conditions": "using_certificate"},
+
+        This is a TLS v1.3-only state
         """
         # frame=packet.get_layer("TLSServerHello")  <- On initial entry. Available if needed
         print(f"{self.state}: entry")
-
-        print("Look at standard for what EncryptedExtensions is used for in TLSv1.2", file=sys.stderr)
 
         # Immediate transition to next state
         self.encrypted_extensions()
@@ -309,10 +312,6 @@ class TLSClientStateMachine(Machine):
 
         cert = kwargs.pop("frame", None)
         if isinstance(cert, TLSCertificate):
-            # Save security parameters from the hello
-            rx_parms = self.rx_security_parameters
-            tx_parms = self.tx_security_parameters
-
             certificates = cert.certificates  # Tuple[ASN_1_Cert]
             print(f"Received {len(certificates)} certificates")
 
@@ -323,8 +322,10 @@ class TLSClientStateMachine(Machine):
             x509_cert = first_cert.x509_certificate
 
             # Save security parameters from the server certificate
-            rx_parms = self.rx_security_parameters
-            tx_parms = self.tx_security_parameters
+            rx_parms = self.rx_security_parameters(active=False)
+            tx_parms = self.tx_security_parameters(active=False)
+
+            rx_parms.server_public_certificate = tx_parms.server_public_certificate = x509_cert
 
             not_valid_after: 'datetime' = x509_cert.not_valid_after
             not_valid_before: 'datetime' = x509_cert.not_valid_before
@@ -346,20 +347,6 @@ class TLSClientStateMachine(Machine):
             #   dsa_signature dsa_signature_value;
             # }
 
-            self.server_public_key = b""
-
-            # TODO: Encode what we can. Many are done in following records
-            # security_parameters.prf_algorithm = .  # PRFAlgorithm
-            # security_parameters.bulk_cipher_algorithm = .  # BulkCipherAlgorithm
-            # security_parameters.cipher_type = .  # CipherType
-            # security_parameters.enc_key_length = .  # int
-            # security_parameters.block_length = .  # int
-            # security_parameters.fixed_iv_length = .  # int
-            # security_parameters.record_iv_length = .  # int
-            # security_parameters.mac_algorithm = .  # TLSMACAlgorithm
-            # security_parameters.mac_length = .  # int
-            # security_parameters.mac_key_length = .  # int
-
             # Save off the server certificate here as this is a common point
             if self._verify_server_certificate:
                 # TODO: Need to decode full list of certs provided...
@@ -370,14 +357,20 @@ class TLSClientStateMachine(Machine):
 
     def rx_server_key_exchange(self, key_exchange: TLSServerKeyExchange):
             # Save security parameters from the hello
-            rx_parms = self.rx_security_parameters
-            tx_parms = self.tx_security_parameters
+            rx_parms = self.rx_security_parameters(active=False)
+            tx_parms = self.tx_security_parameters(active=False)
+
+
+            # Save of public key to the pending parameters
+            rx_params.server_public_key = tx_params.server_public_key = public_key
+
+
+
 
             curve_type: ECCurveType = key_exchange.curve_type
             named_curve: NamedCurve = key_exchange.named_curve
             public_key: bytes = key_exchange.public_key
             signature: bytes = key_exchange.signature
-
 
             # if  'pending suite is 0xC009,   TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
 

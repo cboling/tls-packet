@@ -88,7 +88,7 @@ class TLSRecord(Packet):
         return self._content_type
 
     @staticmethod
-    def parse(frame: bytes, security_params: SecurityParameters, *args, **kwargs) -> Union[List['TLSRecord'], None]:
+    def parse(frame: bytes, *args, **kwargs) -> Union[List['TLSRecord'], None]:
         """
             https://www.ietf.org/rfc/rfc5246.txt
 
@@ -158,6 +158,7 @@ class TLSRecord(Packet):
         if len(frame) < 1:
             raise DecodeError(f"TLSHandshake: header truncated, need minimum of 1 bytes, found: {len(frame)}")
 
+        security_params = kwargs.get('security_params')
         compression = security_params.compression_algorithm
         try:
             record_list = []

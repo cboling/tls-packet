@@ -69,7 +69,6 @@ class TLSServer:
         self.private_key = keys.get("private")
 
         self.tls_session = None
-        self.eap_tls_state = None
 
         self.eap_tls_server_data = b''  # Reassembly area for EAP-TLS
         self.eap_tls_expected_len = 0
@@ -92,7 +91,6 @@ class TLSServer:
         # From earlier work
 
         self.eap_tls_state = None
-        self.tls_ver = None
         self.eap_tls_server_data = b''
         self.eap_tls_expected_len = 0
         self.eap_tls_last_id = 256

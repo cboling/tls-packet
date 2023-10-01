@@ -22,11 +22,12 @@ class TLS:
     _code = tuple()
 
     @classmethod
-    def get_by_code(cls, code: bytes) -> Union['TLS', None]:
-        for tls_obj in (TLSv1_0(), TLSv1_1(), TLSv1_2(), TLSv1_3()):
-            if code == bytes(tls_obj):
-                return tls_obj
-        return None
+    def get_by_code(cls, code: Union[int, bytes]) -> Union['TLS', None]:
+        if isinstance(code, int):
+            code = code.to_bytes(length=2, byteorder='big')
+
+        return next((tls_obj for tls_obj in (TLSv1_0(), TLSv1_1(), TLSv1_2(), TLSv1_3())
+                     if code == bytes(tls_obj)), None)
 
     def __int__(self) -> int:
         return int.from_bytes(bytes(self), 'big')
@@ -59,6 +60,7 @@ class TLSv1(TLS):
 
 
 TLSv1_0 = TLSv1
+SSLv3 = TLSv1
 
 
 class TLSv1_1(TLS):

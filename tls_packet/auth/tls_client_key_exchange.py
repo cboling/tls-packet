@@ -159,7 +159,7 @@ class TLSClientKeyExchange(TLSHandshake):
 
         # Convert server certificate into a serializer/encrypter...
         if server_certificate is not None:
-            server_public_key = serialization.load_der_public_key(server_certificate)
+            server_public_key = serialization.load_der_public_key(server_certificate.certificate)
         else:
             server_public_key = None
 

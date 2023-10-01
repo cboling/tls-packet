@@ -67,7 +67,6 @@ class TestTLSClient(unittest.TestCase):
 
             self.assertEqual(client.ciphers, ciphers)
             self.assertIsNone(client.extensions)
-            self.assertEqual(len(client.messages), 0)
             self.assertIsNone(client.server_certificates)
 
 
