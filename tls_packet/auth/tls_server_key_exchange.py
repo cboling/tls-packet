@@ -286,8 +286,7 @@ class TLSServerKeyExchange(TLSHandshake):
                                      ServerKeyExchange.params;
     """
 
-    def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
-                 public_key: bytes, signature: bytes, *args, **kwargs):
+    def __init__(self, public_key: bytes, signature: bytes, *args, **kwargs):
         super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
 
     @property
@@ -343,12 +342,10 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
 
     def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
                  public_key: bytes, signature: bytes, *args, **kwargs):
-        super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
+        super().__init__(public_key, signature, *args, **kwargs)
 
         self._curve_type = curve_type
         self._named_curve = named_curve
-        self._public_key = public_key
-        self._signature = signature
 
     @property
     def curve_type(self) -> ECCurveType:
@@ -357,14 +354,6 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
     @property
     def named_curve(self) -> NamedCurve:
         return self._named_curve
-
-    @property
-    def public_key(self) -> bytes:
-        return self._public_key
-
-    @property
-    def signature(self) -> bytes:
-        return self._signature
 
     @staticmethod
     def parse(frame: bytes, *args,
@@ -407,11 +396,13 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
         print()
 
         # Verify signature
-        check_content = security_params.client_random + security_params.server_random + \
-                        curve_type.value + named_curve.value + pubkey_len + pubkey
-        # signature_algorithm.verify(signature, check_content)
+        verify = kwargs.pop('verify_contents', True)
+        if verify:
+            check_content = security_params.client_random + security_params.server_random + \
+                            curve_type.value + named_curve.value + pubkey_len + pubkey
+            signature_algorithm.verify(signature, check_content)
 
-        return TLSServerKeyExchangeECDH()
+        return TLSServerKeyExchangeECDH(curve_type, named_curve, pubkey, signature, *args, **kwargs)
 
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:

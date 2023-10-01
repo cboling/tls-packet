@@ -103,7 +103,7 @@ class TestTLSServerKeyExchange(unittest.TestCase):
         # Construct frame
         frame = "0c0001470300174104ceea15247ac22f63d9393d1a160fe67e1962d173a2b75f7fc393fc721467b264d47c1a1915c4f2d29c8d2152b511bfafceb6dddb7ccf9967be094533c17312750100d378956fca3ba101b8b95189f254f867e4ab5b28a9d1f9481bffdae051a5fea39d036d8b1121719faf3dfa8aa45f755e5c174b5e606778fc27638f99f71cab86e84b730967897d5f12a3fe152dd06c5569cdb624f0ef3f4a8100e0aa3ebdce6c5395d5823a0b39ba066e5c462e6bc442d01b1c5840943ec0023aedcecde8277651b29beed36ec06495602ce03d68b100ca80217aebe1eae38a6054209980053c50196e5d25cab3f3a53a0ac2738042ea5ed966e00a68da5a3f7300faf39f89f949df19648220a81eef1e6bb05a588e8138145b4ee84436b534fd011dad694680d7344af86e9a5ca4ad54839487fb09c8a780be055578f79e6f4d73a4aa05939a"
 
-        skey = TLSHandshake.parse(bytes.fromhex(frame))
+        skey = TLSHandshake.parse(bytes.fromhex(frame), verify_contents=False)
 
         self.assertIsNotNone(skey)
         self.assertIsInstance(skey, TLSServerKeyExchange)
@@ -129,7 +129,8 @@ class TestTLSServerKeyExchange(unittest.TestCase):
         # Construct frame
         record_frame = "160301014b0c0001470300174104ceea15247ac22f63d9393d1a160fe67e1962d173a2b75f7fc393fc721467b264d47c1a1915c4f2d29c8d2152b511bfafceb6dddb7ccf9967be094533c17312750100d378956fca3ba101b8b95189f254f867e4ab5b28a9d1f9481bffdae051a5fea39d036d8b1121719faf3dfa8aa45f755e5c174b5e606778fc27638f99f71cab86e84b730967897d5f12a3fe152dd06c5569cdb624f0ef3f4a8100e0aa3ebdce6c5395d5823a0b39ba066e5c462e6bc442d01b1c5840943ec0023aedcecde8277651b29beed36ec06495602ce03d68b100ca80217aebe1eae38a6054209980053c50196e5d25cab3f3a53a0ac2738042ea5ed966e00a68da5a3f7300faf39f89f949df19648220a81eef1e6bb05a588e8138145b4ee84436b534fd011dad694680d7344af86e9a5ca4ad54839487fb09c8a780be055578f79e6f4d73a4aa05939a"
 
-        records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
+        records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params,
+                                  verify_contents=False)
 
         self.assertIsNotNone(records)
         self.assertIsInstance(records, list)
