@@ -16,8 +16,8 @@
 # pylint: skip-file
 
 import unittest
-
 from mocks.util import assertGeneratedFrameEquals
+
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_certificate_request import TLSCertificateRequest, CertificateType
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
@@ -33,6 +33,31 @@ class TestTLSCertificateRequest(unittest.TestCase):
             CertificateType.RSA_SIGN,
             CertificateType.DSS_SIGN,
             CertificateType.ECDSA_SIGN)
+
+    def test_CertificateType(self):
+        # Change underscores to spaces
+        valid_codes = {1, 2, 3, 4, 5, 6, 20, 64, 65, 66}
+        for code in valid_codes:
+            self.assertTrue(CertificateType.has_value(code))
+
+            name = CertificateType(code).name()
+            self.assertFalse('_' in name)
+
+        for enumeration in (CertificateType.RSA_SIGN,
+                            CertificateType.DSS_SIGN,
+                            CertificateType.RSA_FIXED_DH,
+                            CertificateType.DSS_FIXED_DH,
+                            CertificateType.RSA_EPHEMERAL_DH_RESERVED,
+                            CertificateType.DSS_EPHEMERAL_DH_RESERVED,
+                            CertificateType.FORTEZZA_DMS_RESERVED,
+                            CertificateType.ECDSA_SIGN,
+                            CertificateType.RSA_FIXED_ECDH):
+            self.assertTrue(0 <= enumeration.value <= 255)
+
+        for code in range(0, 256):
+            if code not in valid_codes:
+                with self.assertRaises(ValueError):
+                    _ = CertificateType(code)
 
     def test_FrameSerialize(self):
         req = TLSCertificateRequest(self.cert_types, self.dsn_empty)

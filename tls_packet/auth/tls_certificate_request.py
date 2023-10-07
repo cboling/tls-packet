@@ -50,6 +50,10 @@ class CertificateType(IntEnum):
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
 
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
+
 
 class TLSCertificateRequest(TLSHandshake):
     """
