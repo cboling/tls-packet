@@ -22,6 +22,8 @@ from transitions.extensions import GraphMachine
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters, TLSCompressionMethod
+from tls_packet.auth.tls import TLSv1_2
+from tls_packet.auth.tls_signature_algorithm import RsaPkcs1Md5Sha1
 from tls_packet.auth.tls_server_hello import TLSServerHello
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert
 from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange, NamedCurve, ECCurveType
@@ -154,6 +156,15 @@ class TLSClientStateMachine(Machine):
                 print("Rx TLSCertificateRequest")
                 self.rx_certificate_request(eap_id=eap_id, frame=packet.get_layer("TLSCertificateRequest"))
 
+            elif any(packet.has_layer(ke_type) for ke_type in ("TLSServerKeyExchangeECDH",
+                                                               "TLSServerKeyExchangeDH",
+                                                               "TLSServerKeyExchangeRSA")):
+                print("Rx TLSServerKeyExchange")
+                layer = packet.get_layer("TLSServerKeyExchangeECDH") or \
+                        packet.get_layer("TLSServerKeyExchangeDH") or \
+                        packet.get_layer("TLSServerKeyExchangeRSA")
+                self.rx_server_key_exchange(layer)
+
             elif packet.has_layer("TLSServerHelloDone"):
                 print("Rx TLSServerHelloDone")
                 self.rx_server_hello_done(eap_id=eap_id)
@@ -161,10 +172,6 @@ class TLSClientStateMachine(Machine):
             elif packet.has_layer("TLSFinish"):
                 print("Rx TLSFinish")
                 self.rx_finished(eap_id=eap_id, frame=packet.get_layer("TLSFinish"))
-
-            elif packet.has_layer("TLSServerKeyExchange"):
-                print("Rx TLSServerKeyExchange")
-                self.rx_server_key_exchange(packet.get_layer("TLSServerKeyExchange"))
 
             # elif any(packet.has_layer(layer) for layer in ("",)):
             #     print(f"Rx {packet}: No special trigger attached, but we decode it anyway here")
@@ -236,14 +243,12 @@ class TLSClientStateMachine(Machine):
         hello = kwargs.pop("frame", None)
         if isinstance(hello, TLSServerHello):
             # Save security parameters from the hello
+
             rx_parms = self.rx_security_parameters(active=False)
             tx_parms = self.tx_security_parameters(active=False)
 
             # TODO: Encode what we can. Many are done in following records
             cipherSuite = CipherSuite.get_from_id(self.session.tls_version, hello.cipher_suite)
-
-            # self.cipher_suite = CipherSuite.get_from_id(self.tls_version, self.client_random, self.server_random,
-            #                                             self.server_certificate, server_cipher_suite)
 
             if cipherSuite is None:
                 print(f"ServerHello: Unsupported cipher suite selected: {hello.cipher_suite:#04x}")
@@ -360,123 +365,19 @@ class TLSClientStateMachine(Machine):
             rx_parms = self.rx_security_parameters(active=False)
             tx_parms = self.tx_security_parameters(active=False)
 
+            # Validate the key with the signture
+            if rx_parms.tls_version >= TLSv1_2():
+                # If the client has offered the "signature_algorithms" extension, the signature algorithm and
+                # hash algorithm MUST be a pair listed in that extension.
+                signature_algorithm = None
+                # TLSSignatureAlgorithm.get_by_code(frame[offset], rx_parms.server_public_certificate.public_key()), data_bytes[2:]
+            else:
+                signature_algorithm = RsaPkcs1Md5Sha1(rx_parms.server_public_certificate.public_key())
 
-            # Save of public key to the pending parameters
-            rx_params.server_public_key = tx_params.server_public_key = public_key
-
-
-
-
-            curve_type: ECCurveType = key_exchange.curve_type
-            named_curve: NamedCurve = key_exchange.named_curve
-            public_key: bytes = key_exchange.public_key
-            signature: bytes = key_exchange.signature
-
-            # if  'pending suite is 0xC009,   TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA
-
-                # unsigned char curve_type;
-                # unsigned char curve;
-                # unsigned char public_key_length;
-                # unsigned char point_type;
-                # read_pos = read_buffer( ( void * ) &curve_type, read_pos, 1 );
-                #
-                # switch ( curve_type )
-                # {
-                #   case named:
-                #     // named curve takes up two bytes, but only one is populated
-                #     read_pos += 1;
-                #     read_pos = read_buffer( ( void * ) &curve, read_pos, 1 );
-                #     switch ( curve )
-                #     {
-                #       case secp256r1:
-                #         get_named_curve( "prime256v1",
-                #           &parameters->server_ecdh_params );
-                #         break;
-                #       default:
-                #         fprintf( stderr, "error, unsupported named curve %d\n", curve );
-                #         return NULL;
-                #     }
-                #     break;
-                #   default:
-                #     fprintf( stderr, "Error, unsupported curve type %d.\n",
-                #       curve_type );
-                #     return NULL;
-                # }
-                # // Followed by a length-delimited (opaque) public key.
-                # read_pos = read_buffer( ( void * ) &public_key_length, read_pos, 1 );
-                # read_pos = read_buffer( ( void * ) &point_type, read_pos, 1 );
-                # if ( point_type == uncompressed )
-                # {
-                #   load_huge( &parameters->server_ecdh_key.x, read_pos,
-                #     ( public_key_length - 1 ) / 2 );
-                #   load_huge( &parameters->server_ecdh_key.y,
-                #     ( read_pos + ( ( public_key_length - 1 ) / 2 ) ),
-                #     ( ( public_key_length - 1 ) / 2 ) );
-                #   read_pos += ( public_key_length - 1 );
-                #
-                #   // Read and verify the signature
-                #   memcpy( &length, read_pos, 2 );
-                #   length = ntohs( length );
-                #   read_pos += 2;
-                #   if ( !verify_signature( dh_params, ( read_pos - 2 - dh_params ),
-                #         read_pos, length, parameters ) )
-                #   {
-                #     return NULL;
-                #   }
-                #   read_pos += length;
-                # }
-                # else
-                # {
-                #   printf( "point type %d\n", point_type );
-                #   fprintf( stderr, "Error, compressed ECDH public keys not supported.\n" );
-                #   return NULL;
-                # }
-
-            # else  RSA
-      #           for ( i = 0; i < 3; i++ )
-      # {
-      #   memcpy( &length, read_pos, 2 );
-      #   length = ntohs( length );
-      #   read_pos += 2;
-      #   switch ( i )
-      #   {
-      #   case 0:
-      #     load_huge( &parameters->server_dh_key.p, read_pos, length );
-      #     break;
-      #   case 1:
-      #     load_huge( &parameters->server_dh_key.g, read_pos, length );
-      #     break;
-      #   case 2:
-      #     load_huge( &parameters->server_dh_key.Y, read_pos, length );
-      #     break;
-      #   case 3:
-      #     // The third element is the signature over the first three, including their
-      #     // length bytes
-      #     if ( !verify_signature( dh_params,
-      #          ( read_pos - 2 - dh_params ),
-      #          read_pos, length, parameters ) )
-      #     {
-      #       return NULL;
-      #     }
-      #     break;
-      #   }
-
-            # TODO: Encode what we can. Many are done in following records
-            # security_parameters.prf_algorithm = .  # PRFAlgorithm
-            # security_parameters.bulk_cipher_algorithm = .  # BulkCipherAlgorithm
-            # security_parameters.cipher_type = .  # CipherType
-            # security_parameters.enc_key_length = .  # int
-            # security_parameters.block_length = .  # int
-            # security_parameters.fixed_iv_length = .  # int
-            # security_parameters.record_iv_length = .  # int
-            # security_parameters.mac_algorithm = .  # TLSMACAlgorithm
-            # security_parameters.mac_length = .  # int
-            # security_parameters.mac_key_length = .  # int
-
-            #
-            #
-            #
-
+            if not key_exchange.validate(tx_parms.client_random, rx_parms.server_random, signature_algorithm):
+                print("ServerKeyExchange: Public Key is not valid", file=sys.stderr)   # TODO: handle correctly
+                # self.close()
+                # return
 
     def rx_server_hello_done(self, *args, eap_id: Optional[int] = 256, **kwargs):
         """

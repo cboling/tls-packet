@@ -15,6 +15,8 @@
 # -------------------------------------------------------------------------
 
 import struct
+import sys
+
 from enum import IntEnum
 from typing import Union, Optional, Tuple, Any, List
 
@@ -57,65 +59,66 @@ class TLSHelloExtensionType(IntEnum):
         } ExtensionType;
 
     """
-    SERVER_NAME                            = 0   # [RFC6066][RFC9261]
-    MAX_FRAGMENT_LENGTH                    = 1   # [RFC6066][RFC8449]
-    CLIENT_CERTIFICATE_URL                 = 2   # [RFC6066]
-    TRUSTED_CA_KEYS                        = 3   # [RFC6066]
-    TRUNCATED_HMAC                         = 4   # [RFC6066][IESG Action 2018-08-16]
-    STATUS_REQUEST                         = 5   # [RFC6066]
-    USER_MAPPING                           = 6   # [RFC4681]
-    CLIENT_AUTHZ                           = 7   # [RFC5878]
-    SERVER_AUTHZ                           = 8   # [RFC5878]
-    CERT_TYPE                              = 9   # [RFC6091]
-    SUPPORTED_GROUPS                       = 10  # (renamed from "elliptic_curves") [RFC8422][RFC7919]
-    EC_POINT_FORMATS                       = 11  # [RFC8422]
-    SRP                                    = 12  # [RFC5054]
-    SIGNATURE_ALGORITHMS                   = 13  # [RFC8446]
-    USE_SRTP                               = 14  # [RFC5764]
-    HEARTBEAT                              = 15  # [RFC6520]
-    APPLICATION_LAYER_PROTOCOL_NEGOTIATION = 16  # [RFC7301]
-    STATUS_REQUEST_V2                      = 17  # [RFC6961]
-    SIGNED_CERTIFICATE_TIMESTAMP           = 18  # [RFC6962]
-    CLIENT_CERTIFICATE_TYPE                = 19  # [RFC7250]
-    SERVER_CERTIFICATE_TYPE                = 20  # [RFC7250]
-    PADDING                                = 21  # [RFC7685]
-    ENCRYPT_THEN_MAC                       = 22  # [RFC7366]
-    EXTENDED_MASTER_SECRET                 = 23  # [RFC7627]
-    TOKEN_BINDING                          = 24  # [RFC8472]
-    CACHED_INFO                            = 25  # [RFC7924]
-    TLS_LTS                                = 26  # [draft-gutmann-tls-lts]
-    COMPRESS_CERTIFICATE                   = 27  # [RFC8879]
-    RECORD_SIZE_LIMIT                      = 28  # [RFC8449]
-    PWD_PROTECT                            = 29  # [RFC8492]
-    PWD_CLEAR                              = 30  # [RFC8492]
-    PASSWORD_SALT                          = 31  # [RFC8492]
-    TICKET_PINNING                         = 32  # [RFC8672]
-    TLS_CERT_WITH_EXTERN_PSK               = 33  # [RFC8773]
-    DELEGATED_CREDENTIAL                   = 34  # [RFC9345]
-    SESSION_TICKET                         = 35  # [RFC5077][RFC8447]
-    TLMSP                                  = 36  # [ETSI TS 103 523-2]
-    TLMSP_PROXYING                         = 37  # [ETSI TS 103 523-2]
-    TLMSP_DELEGATE                         = 38  # [ETSI TS 103 523-2]
-    SUPPORTED_EKT_CIPHERS                  = 39  # [RFC8870]
-    PRE_SHARED_KEY                         = 41  # [RFC8446]
-    EARLY_DATA                             = 42  # [RFC8446]
-    SUPPORTED_VERSIONS                     = 43  # [RFC8446]
-    COOKIE                                 = 44  # [RFC8446]
-    PSK_KEY_EXCHANGE_MODES                 = 45  # [RFC8446]
-    CERTIFICATE_AUTHORITIES                = 47  # [RFC8446]
-    OID_FILTERS                            = 48  # [RFC8446]
-    POST_HANDSHAKE_AUTH                    = 49  # [RFC8446]
-    SIGNATURE_ALGORITHMS_CERT              = 50  # [RFC8446]
-    KEY_SHARE                              = 51  # [RFC8446]
-    TRANSPARENCY_INFO                      = 52  # [RFC9162]
-    CONNECTION_ID_DEPRECATED               = 53  # [RFC9146](deprecated)
-    CONNECTION_ID                          = 54  # [RFC9146]
-    EXTERNAL_ID_HASH                       = 55  # [RFC8844]
-    EXTERNAL_SESSION_ID                    = 56  # [RFC8844]
-    QUIC_TRANSPORT_PARAMETERS              = 57  # [RFC9001]
-    TICKET_REQUEST                         = 58  # [RFC9149]
-    DNSSEC_CHAIN                           = 59  # [RFC9102][RFC Errata 6860]
-    SEQUENCE_NUMBER_ENCRYPTION_ALGORITHMS  = 60  # [draft-pismenny-tls-dtls-plaintext-sequence-number-01]
+    SERVER_NAME                            = 0       # [RFC6066][RFC9261]
+    MAX_FRAGMENT_LENGTH                    = 1       # [RFC6066][RFC8449]
+    CLIENT_CERTIFICATE_URL                 = 2       # [RFC6066]
+    TRUSTED_CA_KEYS                        = 3       # [RFC6066]
+    TRUNCATED_HMAC                         = 4       # [RFC6066][IESG Action 2018-08-16]
+    STATUS_REQUEST                         = 5       # [RFC6066]
+    USER_MAPPING                           = 6       # [RFC4681]
+    CLIENT_AUTHZ                           = 7       # [RFC5878]
+    SERVER_AUTHZ                           = 8       # [RFC5878]
+    CERT_TYPE                              = 9       # [RFC6091]
+    SUPPORTED_GROUPS                       = 10      # (renamed from "elliptic_curves") [RFC8422][RFC7919]
+    EC_POINT_FORMATS                       = 11      # [RFC8422]
+    SRP                                    = 12      # [RFC5054]
+    SIGNATURE_ALGORITHMS                   = 13      # [RFC8446]
+    USE_SRTP                               = 14      # [RFC5764]
+    HEARTBEAT                              = 15      # [RFC6520]
+    APPLICATION_LAYER_PROTOCOL_NEGOTIATION = 16      # [RFC7301]
+    STATUS_REQUEST_V2                      = 17      # [RFC6961]
+    SIGNED_CERTIFICATE_TIMESTAMP           = 18      # [RFC6962]
+    CLIENT_CERTIFICATE_TYPE                = 19      # [RFC7250]
+    SERVER_CERTIFICATE_TYPE                = 20      # [RFC7250]
+    PADDING                                = 21      # [RFC7685]
+    ENCRYPT_THEN_MAC                       = 22      # [RFC7366]
+    EXTENDED_MASTER_SECRET                 = 23      # [RFC7627]
+    TOKEN_BINDING                          = 24      # [RFC8472]
+    CACHED_INFO                            = 25      # [RFC7924]
+    TLS_LTS                                = 26      # [draft-gutmann-tls-lts]
+    COMPRESS_CERTIFICATE                   = 27      # [RFC8879]
+    RECORD_SIZE_LIMIT                      = 28      # [RFC8449]
+    PWD_PROTECT                            = 29      # [RFC8492]
+    PWD_CLEAR                              = 30      # [RFC8492]
+    PASSWORD_SALT                          = 31      # [RFC8492]
+    TICKET_PINNING                         = 32      # [RFC8672]
+    TLS_CERT_WITH_EXTERN_PSK               = 33      # [RFC8773]
+    DELEGATED_CREDENTIAL                   = 34      # [RFC9345]
+    SESSION_TICKET                         = 35      # [RFC5077][RFC8447]
+    TLMSP                                  = 36      # [ETSI TS 103 523-2]
+    TLMSP_PROXYING                         = 37      # [ETSI TS 103 523-2]
+    TLMSP_DELEGATE                         = 38      # [ETSI TS 103 523-2]
+    SUPPORTED_EKT_CIPHERS                  = 39      # [RFC8870]
+    PRE_SHARED_KEY                         = 41      # [RFC8446]
+    EARLY_DATA                             = 42      # [RFC8446]
+    SUPPORTED_VERSIONS                     = 43      # [RFC8446]
+    COOKIE                                 = 44      # [RFC8446]
+    PSK_KEY_EXCHANGE_MODES                 = 45      # [RFC8446]
+    CERTIFICATE_AUTHORITIES                = 47      # [RFC8446]
+    OID_FILTERS                            = 48      # [RFC8446]
+    POST_HANDSHAKE_AUTH                    = 49      # [RFC8446]
+    SIGNATURE_ALGORITHMS_CERT              = 50      # [RFC8446]
+    KEY_SHARE                              = 51      # [RFC8446]
+    TRANSPARENCY_INFO                      = 52      # [RFC9162]
+    CONNECTION_ID_DEPRECATED               = 53      # [RFC9146](deprecated)
+    CONNECTION_ID                          = 54      # [RFC9146]
+    EXTERNAL_ID_HASH                       = 55      # [RFC8844]
+    EXTERNAL_SESSION_ID                    = 56      # [RFC8844]
+    QUIC_TRANSPORT_PARAMETERS              = 57      # [RFC9001]
+    TICKET_REQUEST                         = 58      # [RFC9149]
+    DNSSEC_CHAIN                           = 59      # [RFC9102][RFC Errata 6860]
+    SEQUENCE_NUMBER_ENCRYPTION_ALGORITHMS  = 60      # [draft-pismenny-tls-dtls-plaintext-sequence-number-01]
+    RENEGOTIATION_INFORMATION              = 0xff01  # RFC-5746
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
@@ -289,11 +292,13 @@ class TLSHelloExtension(Packet):
                     # TLSHelloExtensionType.TICKET_REQUEST:                         TLSxxxExtension,
                     # TLSHelloExtensionType.DNSSEC_CHAIN:                           TLSxxxExtension,
                     # TLSHelloExtensionType.SEQUENCE_NUMBER_ENCRYPTION_ALGORITHMS:  TLSxxxExtension,
+                    TLSHelloExtensionType.RENEGOTIATION_INFORMATION:              TLSRenegotiationInformation,
                 }.get(extension_type)
 
                 if parser is not None:
                     extension = parser.parse(frame, *args, length=length, **kwargs)
                 else:
+                    print(f"UNKNOWN Extension: {extension_type}/{extension_type:04x}", file=sys.stderr)
                     extension = TLSUnsupportedHelloExtension(extension_type, frame[4:], *args, length=length, **kwargs)
 
                 if extension is None:
@@ -546,3 +551,80 @@ class TLSExtendedMasterSecretExtension(TLSHelloExtension):
             raise DecodeError(f"TLSExtendedMasterSecretExtension: Extension type is not EXTENDED_MASTER_SECRET. Found: {extn_type}")
 
         return TLSExtendedMasterSecretExtension(*args, **kwargs)
+
+
+class TLSRenegotiationInformation(TLSHelloExtension):
+    """
+    TLSRenegotiationInformation   [RFC5746]
+
+        This document defines a new TLS extension, "renegotiation_info" (with
+        extension type 0xff01), which contains a cryptographic binding to the
+        enclosing TLS connection (if any) for which the renegotiation is
+        being performed. The "extension data" field of this extension
+        contains a "RenegotiationInfo" structure:
+
+            struct {
+                opaque renegotiated_connection<0..255>;
+            } RenegotiationInfo;
+
+        The contents of this extension are specified as follows.
+
+        o If this is the initial handshake for a connection, then the
+          "renegotiated_connection" field is of zero length in both the
+          ClientHello and the ServerHello. Thus, the entire encoding of the
+          extension is ff 01 00 01 00. The first two octets represent the
+          extension type, the third and fourth octets the length of the
+          extension itself, and the final octet the zero length byte for the
+          "renegotiated_connection" field.
+
+        o For ClientHellos that are renegotiating, this field contains the
+          "client_verify_data" specified in Section 3.1.
+
+        o For ServerHellos that are renegotiating, this field contains the
+          concatenation of client_verify_data and server_verify_data. For
+          current versions of TLS, this will be a 24-byte value (for SSLv3,
+          it will be a 72-byte value).
+
+        This extension also can be used with Datagram TLS (DTLS) [RFC4347].
+        Although, for editorial simplicity, this document refers to TLS, all
+        requirements in this document apply equally to DTLS.
+    """
+    def __init__(self, extension_data: bytes, *args, **kwargs):
+        super().__init__(TLSHelloExtensionType.RENEGOTIATION_INFORMATION, *args, **kwargs)
+        self._extension_data = extension_data
+
+    @property
+    def extension_data(self) -> bytes:
+        return self._extension_data
+
+    @staticmethod
+    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSExtendedMasterSecretExtension', None]:
+        # type(2) + length(2)
+        required = 2 + 2
+        frame_len = len(frame)
+
+        if frame_len < required:
+            raise DecodeError(f"TLSRenegotiationInformation: message truncated: Expected at least {required} bytes, got: {frame_len}")
+
+        extn_type, extn_length = struct.unpack_from("!HH", frame)
+        offset = 4
+
+        if extn_type != TLSHelloExtensionType.RENEGOTIATION_INFORMATION:
+            raise DecodeError(f"TLSRenegotiationInformation: Extension type is not RENEGOTIATION_INFORMATION. Found: {extn_type}")
+
+        if frame_len - offset < extn_length:
+            raise DecodeError(f"TLSRenegotiationInformation: Extension data truncated: Expected at least {extn_length} bytes, got: {frame_len - offset}")
+
+        extn_len = frame[offset]
+        offset += 1
+
+        if extn_len > 0:
+            extn_data = frame[offset:]
+            # TODO: For now, no extra decode or detection of whether we are called from a ClientHello
+            #       or a ServerHello. Use kwargs to pass that info in the future.
+
+        else:
+            extn_data = b""
+
+        return TLSRenegotiationInformation(extn_data,*args, **kwargs)
+

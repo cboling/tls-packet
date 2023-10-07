@@ -11,10 +11,9 @@ from typing import Optional, Iterable, Union, Type, Dict, Any
 
 
 from tls_packet.auth.tls import TLS, TLSv1, TLSv1_1, TLSv1_2, TLSv1_3
-from tls_packet.auth.security_params import TLSMACAlgorithm, TLSKeyExchangeTypes, TLSAuthentication
+from tls_packet.auth.security_params import TLSKeyExchangeTypes, TLSAuthentication
 from tls_packet.auth.encryption_algorithms import AES, AESGCM
-
-
+from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm
 
 CipherSuiteDict = Type[Dict[int, Dict[str, Any]]]
 
@@ -1173,7 +1172,6 @@ class CipherSuite:
     def pre_master_secret(self, value):
         self._derive_key(value)
 
-    @property
     def signature_algorithm(self):
         # name = self.properties.get('message_authentication_code')
         # if name == 'AEAD':
@@ -1181,13 +1179,12 @@ class CipherSuite:
         #     name = openssl_name[openssl_name.rfind('-')+1:]
         #     name = 'SHA1' if name == 'SHA' else name
         # return getattr(signature_algorithms, name)()
-        return None
-        # if self.tls_version >= TLSv1_2():
-        #
-        #     signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
-        #            #    frame[offset], self.server_cert.public_key()), data_bytes[2:]
-        # else:
-        #     signature_algorithm = signature_algorithms.RsaPkcs1Md5Sha1(self.server_certificate.public_key())
+        if self.tls_version >= TLSv1_2():
+             signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
+                                   frame[offset], self.server_cert.public_key()), data_bytes[2:]
+        else:
+            signature_algorithm = signature_algorithms.RsaPkcs1Md5Sha1(self.server_certificate.public_key())
+        return signature_algorithm
 
     @property
     def encryption_algorithm(self) -> 'encryption_algorithms.EncryptionAlgorithm':

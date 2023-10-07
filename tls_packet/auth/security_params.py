@@ -25,26 +25,10 @@ from cryptography.x509 import Certificate
 from tls_packet.auth.tls import TLS
 
 
-#from tls_packet.auth.cipher_suites import CipherSuite
-
 class TLSCompressionMethod(IntEnum):
     """ TLS Record compression (RFC 3749) """
     NULL_METHOD = 0
     DEFLATE_METHOD = 1
-
-    def name(self) -> str:
-        return super().name.replace("_", " ").capitalize()
-
-
-class TLSMACAlgorithm(IntEnum):
-    """ TLS Record compression (RFC 3749) """
-    NULL = 0
-    HMAC_MD5 = 1
-    HMAC_SHA1 = 2
-    HMAC_SHA256 = 3
-    HMAC_SHA384 = 4
-    HMAC_SHA512 = 5
-    HMAC_AEAD = 6
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
@@ -70,7 +54,6 @@ class TLSAuthentication(IntEnum):
     RSA = 1
     DHE = 2
     ECDSA = 4
-
 
 
 class SecurityParameters:
@@ -137,22 +120,7 @@ class SecurityParameters:
         self.cipher_suite = cipher_suite
 
         # Ones from ssl book - TODO  Get rid of these
-        # self.active_cipher_suite: Union[CipherSuite, None] = None
-        # self.proposed_cipher_suite: Union[CipherSuite, None] = None
-        #
         # self.master_key: bytes = b""
-        # self.connection_id: bytes = b""
-        # self.challenge: bytes = int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
-        #
-        # self.server_public_key: RSAKey = RSAKey()
-        #
-        # self.write_sequence_number = 0
-        # self.read_sequence_number = 0
-        #
-        # self.read_key: bytes = b""
-        # self.write_key: bytes = b""
-        # self.read_iv: bytes = b""
-        # self.write_iv: bytes = b""
 
     def copy(self, **kwargs) -> 'SecurityParameters':
         """ Create a copy of the security parameters and optionally override any existing values """

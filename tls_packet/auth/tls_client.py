@@ -28,7 +28,7 @@ from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_state_machine import TLSClientStateMachine
 from tls_packet.packet import Packet
 
-from tls_packet.auth.security_params import TLSMACAlgorithm, TLSKeyExchangeTypes, TLSAuthentication
+from tls_packet.auth.security_params import TLSKeyExchangeTypes
 
 logger = logging.getLogger(__name__)
 

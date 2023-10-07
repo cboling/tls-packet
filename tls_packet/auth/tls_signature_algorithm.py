@@ -17,6 +17,7 @@
 #  Inspired by 'tls_client-handshake_pure_python' available on github at:
 #               https://github.com/nealyip/tls_client_handshake_pure_python
 
+from enum import IntEnum
 from typing import Union, Any
 
 from cryptography import utils
@@ -26,107 +27,21 @@ from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes, Priv
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1, SHA256, SHA384, SHA512, HashAlgorithm
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+from cryptography.hazmat.primitives._asymmetric import  AsymmetricPadding as AsymmetricPadding
 
+class TLSMACAlgorithm(IntEnum):
+    """ TLS Record compression (RFC 3749) """
+    NULL = 0
+    HMAC_MD5 = 1
+    HMAC_SHA1 = 0x0201
+    HMAC_SHA256 = 0x0401
+    HMAC_SHA384 = 0x0501
+    HMAC_SHA512 = 0x0601
+    HMAC_AEAD = 6
 
-class SignatureAlgorithm:
-    """ Base class to simplify signing and verifying data """
-    code = b''
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes],
-                 padding: AsymmetricPadding, algorithm: asym_utils.Prehashed | hashes.HashAlgorithm):
-        """
-        Key is a PublicKeyType for verification, PrivateKeyType for signing
-        """
-        self._key = key
-        self._padding = padding
-        self._algorythm = algorithm
-
-    def verify(self, signature: bytes, content: bytes) -> bool:
-        try:
-            self._key.verify(signature, content, self._padding, self._algorythm)
-            return True
-
-        except InvalidSignature:
-            return False
-
-    def sign(self, content: bytes) -> bytes:
-        return self._key.sign(content, self._padding, self._algorythm)
-
-    @classmethod
-    def get_by_code(cls, code: bytes, key: bytes) -> SignatureAlgorithm:
-        g = globals()
-        found = next(filter(lambda x: getattr(g[x], 'code', None) == code, g))
-        return g[found](key)
-
-
-class RsaPkcs1Md5Sha1(SignatureAlgorithm):
-    code = b''
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, padding.PKCS1v15(), MD5SHA1())
-
-
-class RsaPkcs1Sha1(SignatureAlgorithm):
-    code = b'\x02\x01'
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, padding.PKCS1v15(), SHA1())
-
-
-class RsaPkcs1Sha256(SignatureAlgorithm):
-    code = b'\x04\x01'
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, padding.PKCS1v15(), SHA256())
-
-
-class RsaPssRsaeSha256(SignatureAlgorithm):
-    code = b'\x08\x09'
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, padding.PSS(mgf=padding.MGF1(SHA256()),
-                                          salt_length=padding.PSS.MAX_LENGTH),
-                         SHA256())
-
-
-class RsaPssRsaeSha384(SignatureAlgorithm):
-    code = b'\x08\x05'
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, padding.PSS(mgf=padding.MGF1(SHA384()),
-                                          salt_length=padding.PSS.MAX_LENGTH),
-                         SHA384())
-
-
-class EcdsaSecp256r1Sha256(SignatureAlgorithm):
-    code = b'\x04\x03'
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, None, ec.ECDSA(SHA256()))
-
-    def verify(self, signature: bytes, content: bytes) -> bool:
-        try:
-            self._key.verify(signature, content, ec.ECDSA(SHA256()))
-            return True
-
-        except InvalidSignature:
-            return False
-
-
-class EcdsaSecp384r1Sha384(SignatureAlgorithm):
-    code = b'\x05\x03'
-
-    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
-        super().__init__(key, None,  ec.ECDSA(SHA384()))
-
-    def verify(self, signature: bytes, content: bytes) -> bool:
-        try:
-            self._key.verify(signature, content, ec.ECDSA(SHA384()))
-            return True
-
-        except InvalidSignature:
-            return False
-
+    def name(self) -> str:
+        return super().name.replace("_", " ").capitalize()
 
 """
 # b'\x06\x01'  # rsa_pkcs1_sha512
@@ -153,3 +68,104 @@ class EcdsaSecp384r1Sha384(SignatureAlgorithm):
 # b'\x08\x0a'  # rsa_pss_pss_sha384
 # b'\x08\x0b'  # rsa_pss_pss_sha512
 """
+
+
+class TLSSignatureAlgorithm:
+    """ Base class to simplify signing and verifying data """
+    code = TLSMACAlgorithm.NULL
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes],
+                 asym_padding: AsymmetricPadding, algorithm: Union[Prehashed, HashAlgorithm]):
+        """
+        Key is a PublicKeyType for verification, PrivateKeyType for signing
+        """
+        self._key = key
+        self._padding = asym_padding
+        self._algorythm = algorithm
+
+    def verify(self, signature: bytes, content: bytes) -> bool:
+        try:
+            self._key.verify(signature, content, self._padding, self._algorythm)
+            return True
+
+        except InvalidSignature as _e:
+            return False
+
+    def sign(self, content: bytes) -> bytes:
+        return self._key.sign(content, self._padding, self._algorythm)
+
+    @classmethod
+    def get_by_code(cls, code: bytes, key: bytes) -> 'TLSSignatureAlgorithm':
+        g = globals()
+        found = next(filter(lambda x: getattr(g[x], 'code', None) == code, g))
+        return g[found](key)
+
+
+class RsaPkcs1Md5Sha1(TLSSignatureAlgorithm):
+    code = b''
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, padding.PKCS1v15(), MD5())
+
+
+class RsaPkcs1Sha1(TLSSignatureAlgorithm):
+    code = TLSMACAlgorithm.HMAC_SHA1
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, padding.PKCS1v15(), SHA1())
+
+
+class RsaPkcs1Sha256(TLSSignatureAlgorithm):
+    code = TLSMACAlgorithm.HMAC_SHA256
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, padding.PKCS1v15(), SHA256())
+
+
+class RsaPssRsaeSha256(TLSSignatureAlgorithm):
+    code = b'\x08\x09'
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, padding.PSS(mgf=padding.MGF1(SHA256()),
+                                          salt_length=padding.PSS.MAX_LENGTH),
+                         SHA256())
+
+
+class RsaPssRsaeSha384(TLSSignatureAlgorithm):
+    code = b'\x08\x05'
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, padding.PSS(mgf=padding.MGF1(SHA384()),
+                                          salt_length=padding.PSS.MAX_LENGTH),
+                         SHA384())
+
+
+class EcdsaSecp256r1Sha256(TLSSignatureAlgorithm):
+    code = b'\x04\x03'
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, None, ec.ECDSA(SHA256()))
+
+    def verify(self, signature: bytes, content: bytes) -> bool:
+        try:
+            self._key.verify(signature, content, ec.ECDSA(SHA256()))
+            return True
+
+        except InvalidSignature:
+            return False
+
+
+class EcdsaSecp384r1Sha384(TLSSignatureAlgorithm):
+    code = b'\x05\x03'
+
+    def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
+        super().__init__(key, None,  ec.ECDSA(SHA384()))
+
+    def verify(self, signature: bytes, content: bytes) -> bool:
+        try:
+            self._key.verify(signature, content, ec.ECDSA(SHA384()))
+            return True
+
+        except InvalidSignature:
+            return False
+

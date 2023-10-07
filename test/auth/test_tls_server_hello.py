@@ -64,7 +64,7 @@ class TestTLSServerHello(unittest.TestCase):
         hello_data += "c014"               # Cipher Suite (TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA)
         hello_data += "00"                 # Compression method (null)
         hello_data += "0015"               # Extension Length
-        hello_data += "ff01000100"         # renegotiation_info
+        hello_data += "ff01000100"         # renegotiation_info                  # TODO: Need to support and code this
         hello_data += "000b000403000102"   # ec_points_formats
         hello_data += "00160000"           # encrypt_then_mac
         hello_data += "00170000"           # extended_master_secret
