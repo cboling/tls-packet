@@ -23,6 +23,7 @@ from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.security_params import TLSKeyExchangeTypes
 from tls_packet.auth.tls import TLS, TLSv1_2
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
+from tls_packet.auth.tls_named_curve import get_named_curve_by_type, ECCurveType, NamedCurveType, NamedCurve
 from tls_packet.packet import DecodeError, PARSE_ALL
 
 
@@ -35,77 +36,6 @@ class KeyExchangeAlgorithm(IntEnum):
     RSA     = 4
     DH_DSS  = 5
     DH_RSA  = 6
-
-    def name(self) -> str:
-        return super().name.replace("_", " ").capitalize()
-
-    @classmethod
-    def has_value(cls, val: int) -> bool:
-        return val in cls._value2member_map_
-
-
-class ECCurveType(IntEnum):
-    """
-    The ECCurveType enum used to have values for explicit prime and for
-    explicit char2 curves.  Those values are now deprecated, so only one
-    value remains:
-
-       enum {
-           deprecated (1..2),       # Was explicit_prime (1) and explicit_char2 (2)
-           named_curve (3),
-           reserved(248..255)
-       } ECCurveType;
-    """
-    EXPLICIT_PRIME = 1  # Deprecated
-    EXPLICIT_CHAR2 = 2  # Deprecated
-    NAMED_CURVE = 3
-
-    def name(self) -> str:
-        return super().name.replace("_", " ").capitalize()
-
-    @classmethod
-    def has_value(cls, val: int) -> bool:
-        return val in cls._value2member_map_
-
-
-class NamedCurve(IntEnum):
-    """
-    RFC 4492 defined 25 different curves in the NamedCurve registry (now
-    renamed the "TLS Supported Groups" registry, although the enumeration
-    below is still named NamedCurve) for use in TLS.  Only three have
-    seen much use.  This specification is deprecating the rest (with
-    numbers 1-22).  This specification also deprecates the explicit
-    curves with identifiers 0xFF01 and 0xFF02.  It also adds the new
-    curves defined in [RFC7748].  The end result is as follows:
-
-       enum {
-           deprecated(1..22),
-           secp256r1 (23), secp384r1 (24), secp521r1 (25),
-           x25519(29), x448(30),
-           reserved (0xFE00..0xFEFF),
-           deprecated(0xFF01..0xFF02),
-           (0xFFFF)
-       } NamedCurve;
-    """
-    SECP256R1 = 23
-    SECP384R1 = 24
-    SECP521R1 = 25,
-    X25519 = 29
-    X488 = 30
-
-    def name(self) -> str:
-        return super().name.replace("_", " ").capitalize()
-
-    @classmethod
-    def has_value(cls, val: int) -> bool:
-        return val in cls._value2member_map_
-
-
-class ECPointsFormat(IntEnum):		# TODO: Move to own file
-
-    UNCOMPRESSED = 0
-    ANSIX962_COMPRESSED_PRIME = 1
-    ANSIX962_COMPRESSED_CHAR2 = 2
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
@@ -277,6 +207,10 @@ class TLSServerKeyExchange(TLSHandshake):
         return self._key
 
     @property
+    def server_params(self) -> 'bytes':
+        return self._server_params
+
+    @property
     def signature(self) -> bytes:
         return self._signature
 
@@ -422,7 +356,8 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
               ClientHello.random + ServerHello.random +
                                      ServerKeyExchange.params;
     """
-    def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
+
+    def __init__(self, curve_type: ECCurveType, named_curve_type: NamedCurveType,
                  public_key: bytes, signature: bytes, server_params: Optional[bytes] = b"", **kwargs):
         if not server_params:
             # TODO If server_parms are empty, construct from what was provided
@@ -435,22 +370,26 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
             raise DecodeError(f"TLSServerKeyExchange (ECDH): Curve type {curve_type} is deprecated")
 
         self._curve_type = curve_type
-        self._named_curve = named_curve
+        self._named_curve_type = named_curve_type
 
     @property
     def curve_type(self) -> ECCurveType:
         return self._curve_type
 
     @property
+    def named_curve_type(self) -> NamedCurveType:
+        return self._named_curve_type
+
+    @property
     def named_curve(self) -> NamedCurve:
-        return self._named_curve
+        return get_named_curve_by_type(self._named_curve_type)
 
     @staticmethod
     def parse(frame: bytes, tls_version: Optional[TLS] = None,
               max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
         curve_type = ECCurveType(frame[0])
-        named_curve = NamedCurve(struct.unpack_from("!H", frame, 1)[0])
+        named_curve_type = NamedCurveType(struct.unpack_from("!H", frame, 1)[0])
         offset = 3
         pubkey_len = frame[offset]
         offset += 1
@@ -470,7 +409,7 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
         print()
         print("Server Key Exchange Received:")
         print(f"  Curve Type : {curve_type}")
-        print(f"  Named Curve: {named_curve}")
+        print(f"  Named Curve: {named_curve_type}")
         print(f"  Pubkey     : ({pubkey_len}): {pubkey.hex()}")
         print(f"  Signature  : ({sig_len}): {signature.hex()}")
         print()
@@ -484,25 +423,122 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
         # } ServerECDHParams;
         server_params = frame[0:4] + pubkey
 
-        return TLSServerKeyExchangeECDH(curve_type, named_curve, pubkey, signature, server_param=server_params, **kwargs)
+        return TLSServerKeyExchangeECDH(curve_type, named_curve_type, pubkey, signature,
+                                        server_param=server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
 
 
 class TLSServerKeyExchangeDH(TLSServerKeyExchange):
+    """
+    TLS Server Key Exchange Message
 
-    def __init__(self, signature: bytes, server_params: bytes, **kwargs):
+          struct {
+              opaque dh_p<1..2^16-1>;
+              opaque dh_g<1..2^16-1>;
+              opaque dh_Ys<1..2^16-1>;
+          } ServerDHParams;     /* Ephemeral DH parameters */
+
+          dh_p
+             The prime modulus used for the Diffie-Hellman operation.
+
+          dh_g
+             The generator used for the Diffie-Hellman operation.
+
+          dh_Ys
+             The server's Diffie-Hellman public value (g^X mod p).
+
+           struct {
+               select (KeyExchangeAlgorithm) {
+                   case dh_anon:
+                       ServerDHParams params;
+                   case dhe_dss:
+                   case dhe_rsa:
+                       ServerDHParams params;
+                       digitally-signed struct {
+                           opaque client_random[32];
+                           opaque server_random[32];
+                           ServerDHParams params;
+                       } signed_params;
+                   case rsa:
+                   case dh_dss:
+                   case dh_rsa:
+                       struct {} ;
+                      /* message is omitted for rsa, dh_dss, and dh_rsa */
+                   /* may be extended, e.g., for ECDH -- see [TLSECC] */
+           } ServerKeyExchange;
+
+    """
+
+    def __init__(self, dh_p: bytes, dh_g: int, dh_ys: bytes, hash_algo: int, signature: bytes, server_params: bytes, **kwargs):
         super().__init__(signature, server_params, **kwargs)
+        self._dh_p = dh_p
+        self._dh_g = dh_g
+        self._dh_ys = dh_ys
+        self._hash = hash_algo
+
+    @property
+    def dh_p(self) -> bytes:
+        return self._dh_p
+
+    @property
+    def dh_g(self) -> int:
+        return self._dh_g
+
+    @property
+    def dh_ys(self) -> bytes:
+        return self._dh_ys
+
+    @property
+    def hash_algorithm(self) -> int:
+        return self._hash  # TODO: need enumeration/class and not INT here
 
     @staticmethod
     def parse(frame: bytes, tls_version: Optional[TLS] = None,
               max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
+        frame_len = len(frame)
 
-        signature = b""
+        dh_p_length = struct.unpack_from("!H", frame, 0)[0]
+        offset = 2
+
+        if dh_p_length + offset > frame_len:
+            raise DecodeError("TLSServerKeyExchangeDH: message truncated. Unable to extract the prime modulus 'dh_p'")
+
+        dh_p = frame[offset:offset + dh_p_length]
+        offset += dh_p_length
+
+        if offet + 1 > frame_len:
+            raise DecodeError("TLSServerKeyExchangeDH: message truncated. Unable to extract the generator 'dh_g'")
+
+        dh_g = frame[offset]
+        offset += 1
+
+        dh_ys_len = struct.unpack_from("!H", frame, offset)[0]
+        offset += 2
+        if dh_ys_len + offet > frame_len:
+            raise DecodeError("TLSServerKeyExchangeDH: message truncated. Unable to extract the Diffie-Hellman public value (g^X mod p) 'dh_Ys'")
+
+        dh_ys = frame[offset:offset + dh_ys_len]
+        offset += dh_ys_len
+
+        sig_len = struct.unpack_from("!H", frame, offset)[0]
+        offset += 2
+        if sig_len + offset > frame_len:
+            raise DecodeError("TLSServerKeyExchangeDH: message truncated. Unable to extract signature")
+
+        signature = frame[offset:offset + sig_len] if sig_len else b""
+        print()
+        print("Server Key Exchange Received:")
+        print(f"  dh_p      : ({dh_p_length}): {dh_p.hex()}")
+        print(f"  dh_g      : {dh_g.hex()}")
+        print(f"  dh_Ys     : ({dh_ys_len}): {dh_ys.hex()}")
+        print(f"  Hash      : {hash_algo}/{hash_algo:#04x}")
+        print(f"  Signature : ({sig_len}): {signature.hex()}")
+        print()
         server_params = b""
-        return TLSServerKeyExchangeDH(signature, server_params, **kwargs)
+        return TLSServerKeyExchangeDH(dh_p, dh_g, dh_ys, hash_algo, signature, server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

@@ -15,18 +15,18 @@
 # -------------------------------------------------------------------------
 import sys
 from cryptography.x509 import Certificate, Extension, Extensions, ObjectIdentifier, Version, Name
-from typing import Optional, Tuple, List, Any, Union
-
 from transitions import Machine, State
 from transitions.extensions import GraphMachine
+from typing import Optional, Tuple, List, Any, Union
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters, TLSCompressionMethod
 from tls_packet.auth.tls import TLSv1_2
-from tls_packet.auth.tls_signature_algorithm import RsaPkcs1Md5Sha1
-from tls_packet.auth.tls_server_hello import TLSServerHello
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert
-from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange, NamedCurve, ECCurveType
+from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurve, NamedCurveType
+from tls_packet.auth.tls_server_hello import TLSServerHello
+from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange
+from tls_packet.auth.tls_signature_algorithm import RsaPkcs1Md5Sha1
 
 
 class TLSClientStateMachine(Machine):

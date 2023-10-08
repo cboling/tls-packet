@@ -17,18 +17,23 @@
 #  Inspired by 'tls_client-handshake_pure_python' available on github at:
 #               https://github.com/nealyip/tls_client_handshake_pure_python
 
+from cryptography import utils
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives._asymmetric import AsymmetricPadding as AsymmetricPadding
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes, PrivateKeyTypes
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1, SHA256, SHA384, SHA512, HashAlgorithm
 from enum import IntEnum
 from typing import Union, Any
 
-from cryptography import utils
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes, PrivateKeyTypes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1, SHA256, SHA384, SHA512, HashAlgorithm
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from cryptography.hazmat.primitives._asymmetric import  AsymmetricPadding as AsymmetricPadding
+
+class MD5SHA1(SHA1):
+    name = "md5-sha1"
+    digest_size = 36
+    block_size = 64
 
 class TLSMACAlgorithm(IntEnum):
     """ TLS Record compression (RFC 3749) """
@@ -107,6 +112,14 @@ class RsaPkcs1Md5Sha1(TLSSignatureAlgorithm):
     def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
         super().__init__(key, padding.PKCS1v15(), MD5())
 
+    def verify(self, signature, content):
+        try:
+            self._key.verify(signature, content, padding.PKCS1v15(), MD5SHA1())
+            return True
+
+        except InvalidSignature:
+            return False
+
 
 class RsaPkcs1Sha1(TLSSignatureAlgorithm):
     code = TLSMACAlgorithm.HMAC_SHA1
@@ -114,12 +127,28 @@ class RsaPkcs1Sha1(TLSSignatureAlgorithm):
     def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
         super().__init__(key, padding.PKCS1v15(), SHA1())
 
+    def verify(self, signature, content):
+        try:
+            self._key.verify(signature, content, padding.PKCS1v15(), SHA1())
+            return True
+
+        except InvalidSignature:
+            return False
+
 
 class RsaPkcs1Sha256(TLSSignatureAlgorithm):
     code = TLSMACAlgorithm.HMAC_SHA256
 
     def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
         super().__init__(key, padding.PKCS1v15(), SHA256())
+
+    def verify(self, signature, content):
+        try:
+            self._key.verify(signature, content, padding.PKCS1v15(), SHA256())
+            return True
+
+        except InvalidSignature:
+            return False
 
 
 class RsaPssRsaeSha256(TLSSignatureAlgorithm):
@@ -130,6 +159,17 @@ class RsaPssRsaeSha256(TLSSignatureAlgorithm):
                                           salt_length=padding.PSS.MAX_LENGTH),
                          SHA256())
 
+    def verify(self, signature, content):
+        try:
+            self._key.verify(signature, content, padding.PSS(
+                mgf=padding.MGF1(SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ), SHA256())
+            return True
+
+        except InvalidSignature:
+            return False
+
 
 class RsaPssRsaeSha384(TLSSignatureAlgorithm):
     code = b'\x08\x05'
@@ -139,6 +179,17 @@ class RsaPssRsaeSha384(TLSSignatureAlgorithm):
                                           salt_length=padding.PSS.MAX_LENGTH),
                          SHA384())
 
+    def verify(self, signature, content):
+        try:
+            self._key.verify(signature, content, padding.PSS(
+                mgf=padding.MGF1(SHA384()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ), SHA384())
+            return True
+
+        except InvalidSignature:
+            return False
+
 
 class EcdsaSecp256r1Sha256(TLSSignatureAlgorithm):
     code = b'\x04\x03'
@@ -146,7 +197,7 @@ class EcdsaSecp256r1Sha256(TLSSignatureAlgorithm):
     def __init__(self, key: Union[PublicKeyTypes, PrivateKeyTypes]):
         super().__init__(key, None, ec.ECDSA(SHA256()))
 
-    def verify(self, signature: bytes, content: bytes) -> bool:
+    def verify(self, signature, content):
         try:
             self._key.verify(signature, content, ec.ECDSA(SHA256()))
             return True
@@ -168,4 +219,3 @@ class EcdsaSecp384r1Sha384(TLSSignatureAlgorithm):
 
         except InvalidSignature:
             return False
-

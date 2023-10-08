@@ -19,7 +19,7 @@ import sys
 from enum import IntEnum
 from typing import Union, Optional, Tuple, Any, List
 
-from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve, ECPointsFormat
+from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurve, NamedCurveType, ECPointsFormat
 from tls_packet.packet import DecodeError, PARSE_ALL
 from tls_packet.packet import Packet
 
