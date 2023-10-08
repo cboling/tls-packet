@@ -168,7 +168,7 @@ class RSAPreMasterSecret:
         self._server_random = server_random
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to RSAPreMasterSecret """
         raise NotImplementedError("TODO: Not yet supported")
 

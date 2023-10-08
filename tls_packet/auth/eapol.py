@@ -89,7 +89,7 @@ class EAPOL(Packet):
         return self._packet_type
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EAPOL':
+    def parse(frame: bytes, **kwargs) -> 'EAPOL':
         """
         """
         if frame is None:
@@ -115,7 +115,7 @@ class EAPOL(Packet):
             }.get(msg_type)
 
             print(f"EAPOL:parse. Before Decompression: {frame.hex()}")
-            packet = frame_type.parse(frame, version, length, *args, **kwargs)
+            packet = frame_type.parse(frame, version, length, **kwargs)
 
             if packet is None:
                 raise DecodeError(f"Failed to decode EAPOL: {frame_type}")
@@ -149,7 +149,7 @@ class EapolEAP(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, version: int, length: int, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'EapolEAP':
+    def parse(frame: bytes, version: int, length: int, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'EapolEAP':
         required = 4 + 4
 
         if len(frame) < required:
@@ -164,10 +164,10 @@ class EapolEAP(EAPOL):
         payload_data = frame[offset:required]
         if max_depth > 0:
             # Parse the handshake message
-            payload = EAP.parse(payload_data, *args, max_depth=max_depth-1, **kwargs)
+            payload = EAP.parse(payload_data, max_depth=max_depth - 1, **kwargs)
         else:
             # Save it as blob data (note that we use the decompressed data)
-            payload = PacketPayload(payload_data, *args, **kwargs)
+            payload = PacketPayload(payload_data, **kwargs)
 
         return EapolEAP(eap=payload, version=version, length=length, **kwargs)
 
@@ -206,7 +206,7 @@ class EapolStart(EAPOL):
         return super().pack(payload=payload)
 
     @staticmethod
-    def parse(frame: bytes, version: int, length: int, *args, **kwargs) -> 'EapolStart':
+    def parse(frame: bytes, version: int, length: int, **kwargs) -> 'EapolStart':
         tlvs = None
         if version >= 3 and length > 4:
             # TODO: Support when needed.  Add length check for truncated...
@@ -223,7 +223,7 @@ class EapolLogoff(EAPOL):
             raise DecodeError(f"EapolLogoff: Packet body length not zero: found {self._msg_length}")
 
     @staticmethod
-    def parse(frame: bytes, version: int, length: int, *args, **kwargs) -> 'EapolLogoff':
+    def parse(frame: bytes, version: int, length: int, **kwargs) -> 'EapolLogoff':
         if length > 0:
             raise DecodeError(f"EapolLogoff: message payload length should be 0, found: {length}")
 
@@ -239,7 +239,7 @@ class EapolKey(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapolKey':
+    def parse(frame: bytes, **kwargs) -> 'EapolKey':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -252,7 +252,7 @@ class EapolEncapsulatedAsfAlert(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> Union['EapolEncapsulatedAsfAlert', None]:
+    def parse(frame: bytes, **kwargs) -> Union['EapolEncapsulatedAsfAlert', None]:
         raise NotImplementedError("Not yet implemented")
 
 
@@ -265,7 +265,7 @@ class EapolMKA(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapolMKA':
+    def parse(frame: bytes, **kwargs) -> 'EapolMKA':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -278,7 +278,7 @@ class EapolAnnouncementGeneric(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> Union['EapolAnnouncementGeneric', None]:
+    def parse(frame: bytes, **kwargs) -> Union['EapolAnnouncementGeneric', None]:
         raise NotImplementedError("Not yet implemented")
 
 
@@ -291,7 +291,7 @@ class EapolAnnouncementSpecific(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapolAnnouncementSpecific':
+    def parse(frame: bytes, **kwargs) -> 'EapolAnnouncementSpecific':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -304,5 +304,5 @@ class EapolAnnouncmentReq(EAPOL):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapolAnnouncmentReq':
+    def parse(frame: bytes, **kwargs) -> 'EapolAnnouncmentReq':
         raise NotImplementedError("Not yet implemented")

@@ -16,9 +16,9 @@
 # pylint: skip-file
 
 import unittest
-
 from mocks.mock_packet import FIXED_RANDOM
 from mocks.util import assertGeneratedFrameEquals
+
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls import TLSv1
@@ -27,7 +27,7 @@ from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordC
 from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange, ECCurveType, NamedCurve, TLSServerKeyExchangeECDH
 
 
-class TestTLSServerKeyExchange(unittest.TestCase):
+class TestTLSServerKeyExchangeECDH(unittest.TestCase):
     @classmethod
     def setUp(cls):
         cipher_suite = CipherSuite.get_from_id(TLSv1(), 0xC014)
@@ -86,9 +86,9 @@ class TestTLSServerKeyExchange(unittest.TestCase):
                     _ = NamedCurve(code)
 
     def test_FrameSerialize(self):
-        skey = TLSServerKeyExchange(self.curve_type, self.named_curve,
-                                    bytes.fromhex(self.pubkey),
-                                    bytes.fromhex(self.signature))
+        skey = TLSServerKeyExchangeECDH(self.curve_type, self.named_curve,
+                                        bytes.fromhex(self.pubkey),
+                                        bytes.fromhex(self.signature), server_params=self.security_params)
         self.assertEqual(skey.msg_type, TLSHandshakeType.SERVER_KEY_EXCHANGE)
         with self.assertRaises(NotImplementedError):
             # TODO: Not yet supported
@@ -109,9 +109,9 @@ class TestTLSServerKeyExchange(unittest.TestCase):
         self.assertEqual(skey.signature.hex(), self.signature)
 
     def test_RecordSerialize(self):
-        skey = TLSServerKeyExchange(self.curve_type, self.named_curve,
-                                    bytes.fromhex(self.pubkey),
-                                    bytes.fromhex(self.signature))
+        skey = TLSServerKeyExchangeECDH(self.curve_type, self.named_curve,
+                                        bytes.fromhex(self.pubkey),
+                                        bytes.fromhex(self.signature))
         record = skey.to_record()
         self.assertIsInstance(record, TLSHandshakeRecord)
         self.assertEqual(record.content_type, TLSRecordContentType.HANDSHAKE)

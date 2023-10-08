@@ -43,17 +43,12 @@ def get_time_ns() -> int:
 class Packet:
     """ Base packet class """
     def __init__(self,
-                 *args,
                  original_frame: Optional[bytes] = b'',  # TODO: Is this ever used or is useful?
                  layers: Optional[Iterable['Packet']] = None,
                  timestamp: Optional[Union[int, None]] = None, **kwargs):
 
         # import sys
         # print(f"packet.__init__: Entry, layers: {layers}", file=sys.stderr)
-
-        if len(args):
-            # By now, all derived classes should have consumed any extra positional arguments.  Perhaps we missed one or had a type?
-            print(f"TODO: Reached base Packet class with additional arguments: {len(args)}")
 
         if len(kwargs):
             # By now, all derived classes should have consumed any extra keywords.  Perhaps we missed one or had a type?
@@ -122,7 +117,7 @@ class Packet:
         return None
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['Packet', None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['Packet', None]:
         """
         Recursively parse a frame of bytes into a packet layer, but limit to at most 'max_depth' more layers
 
@@ -143,11 +138,12 @@ class PacketPayload(Packet):
 
     Do not confuse this with any 'payload' that a layer may want to hide or keep track of for other reasons
     """
-    def __init__(self, frame, *args, **kwargs):
-        super().__init__(*args, original_frame=frame, **kwargs)
+
+    def __init__(self, frame, **kwargs):
+        super().__init__(original_frame=frame, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> Union['Packet', None]:
+    def parse(frame: bytes, **kwargs) -> Union['Packet', None]:
         """ Recursively parse a frame of bytes into a packet layer, but limit to at most 'max_depth' more layers """
         return PacketPayload(original_frame=frame, **kwargs)
 

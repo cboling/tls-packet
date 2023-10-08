@@ -16,15 +16,12 @@
 
 import struct
 import sys
-
 from enum import IntEnum
 from typing import Union, Optional, Tuple, Any, List
 
+from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve, ECPointsFormat
 from tls_packet.packet import DecodeError, PARSE_ALL
 from tls_packet.packet import Packet
-
-
-from tls_packet.auth.tls_server_key_exchange import ECCurveType, NamedCurve, ECPointsFormat
 
 
 class TLSHelloExtensionType(IntEnum):
@@ -216,7 +213,7 @@ class TLSHelloExtension(Packet):
         return self._msg_length
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> List["TLSHelloExtension"]:
+    def parse(frame: bytes, **kwargs) -> List["TLSHelloExtension"]:
         if frame is None:
             raise DecodeError("TLSHelloExtension.parse: Called with frame = None")
 
@@ -296,10 +293,10 @@ class TLSHelloExtension(Packet):
                 }.get(extension_type)
 
                 if parser is not None:
-                    extension = parser.parse(frame, *args, length=length, **kwargs)
+                    extension = parser.parse(frame, length=length, **kwargs)
                 else:
                     print(f"UNKNOWN Extension: {extension_type}/{extension_type:04x}", file=sys.stderr)
-                    extension = TLSUnsupportedHelloExtension(extension_type, frame[4:], *args, length=length, **kwargs)
+                    extension = TLSUnsupportedHelloExtension(extension_type, frame[4:], length=length, **kwargs)
 
                 if extension is None:
                     DecodeError(f"Failed to decode TLSHelloExtension. {len} extensions decoded so far and remaining frame length was {len(frame)}")
@@ -327,8 +324,9 @@ class TLSUnsupportedHelloExtension(TLSHelloExtension):
     """
     Helper class to bundle all extensions that are not fully supported
     """
-    def __init__(self, exten_type: TLSHelloExtensionType, payload: bytes, *args, **kwargs):
-        super().__init__(exten_type, *args, **kwargs)
+
+    def __init__(self, exten_type: TLSHelloExtensionType, payload: bytes, **kwargs):
+        super().__init__(exten_type, **kwargs)
         self._payload = payload
 
     def __repr__(self):
@@ -352,8 +350,9 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
         seen much use.
 
     """
-    def __init__(self, *args, supported_groups: Optional[List[int]] = None, **kwargs):
-        super().__init__(TLSHelloExtensionType.SUPPORTED_GROUPS, *args, **kwargs)
+
+    def __init__(self, supported_groups: Optional[List[int]] = None, **kwargs):
+        super().__init__(TLSHelloExtensionType.SUPPORTED_GROUPS, **kwargs)
         self._supported_groups = supported_groups or []
 
     def __repr__(self):
@@ -364,7 +363,7 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
         return tuple(self._supported_groups)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSSupportedGroupsExtension', None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSSupportedGroupsExtension', None]:
         required = 2
         extn_data_len = len(frame) - 4 - required
 
@@ -384,7 +383,7 @@ class TLSSupportedGroupsExtension(TLSHelloExtension):
 
         supported_groups = [int.from_bytes(frame[offset:offset + 2], 'big') for offset in range(0, extn_len, 2)]
 
-        return TLSSupportedGroupsExtension(supported_groups=supported_groups, *args, **kwargs)
+        return TLSSupportedGroupsExtension(supported_groups=supported_groups, **kwargs)
 
     def pack(self,  payload: Optional[bytes] = b'') -> bytes:
         buffer = struct.pack("!H", len(self._supported_groups) * 2)
@@ -416,8 +415,9 @@ class TLSECPointsFormatExtension(TLSHelloExtension):
         this specification, then the server MUST abort the handshake and
         return an illegal_parameter alert.
     """
-    def __init__(self, *args, formats: Optional[List[ECPointsFormat]] = None, **kwargs):
-        super().__init__(TLSHelloExtensionType.EC_POINT_FORMATS, *args, **kwargs)
+
+    def __init__(self, formats: Optional[List[ECPointsFormat]] = None, **kwargs):
+        super().__init__(TLSHelloExtensionType.EC_POINT_FORMATS, **kwargs)
         self._formats = formats or []
 
     def __repr__(self):
@@ -428,7 +428,7 @@ class TLSECPointsFormatExtension(TLSHelloExtension):
         return tuple(self._formats)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSECPointsFormatExtension', None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSECPointsFormatExtension', None]:
         required = 1
         extn_data_len = len(frame) - 4 - required
 
@@ -445,7 +445,7 @@ class TLSECPointsFormatExtension(TLSHelloExtension):
 
         formats = [ECPointsFormat(frame[offset]) for offset in range(0, extn_len)]
 
-        return TLSECPointsFormatExtension(formats=formats, *args, **kwargs)
+        return TLSECPointsFormatExtension(formats=formats, **kwargs)
 
     def pack(self,  payload: Optional[bytes] = b'') -> bytes:
         buffer = struct.pack("!b", len(self._formats))
@@ -492,16 +492,17 @@ class TLSEncryptThenMacExtension(TLSHelloExtension):
         encrypt-then-MAC unless both sides have successfully exchanged
         encrypt_then_mac extensions.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(TLSHelloExtensionType.ENCRYPT_THEN_MAC, *args, **kwargs)
+
+    def __init__(self, **kwargs):
+        super().__init__(TLSHelloExtensionType.ENCRYPT_THEN_MAC, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSEncryptThenMacExtension', None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSEncryptThenMacExtension', None]:
         extn_type, _ = struct.unpack_from("!HH", frame)
         if extn_type != TLSHelloExtensionType.ENCRYPT_THEN_MAC:
             raise DecodeError(f"TLSEncryptThenMacExtension: Extension type is not ENCRYPT_THEN_MAC. Found: {extn_type}")
 
-        return TLSEncryptThenMacExtension(*args, **kwargs)
+        return TLSEncryptThenMacExtension(**kwargs)
 
 
 class TLSExtendedMasterSecretExtension(TLSHelloExtension):
@@ -541,16 +542,17 @@ class TLSExtendedMasterSecretExtension(TLSHelloExtension):
         compound authentication that fall into the vulnerable cases described
         in Section 6.1.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__(TLSHelloExtensionType.EXTENDED_MASTER_SECRET, *args, **kwargs)
+
+    def __init__(self, **kwargs):
+        super().__init__(TLSHelloExtensionType.EXTENDED_MASTER_SECRET, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSExtendedMasterSecretExtension', None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSExtendedMasterSecretExtension', None]:
         extn_type, _ = struct.unpack_from("!HH", frame)
         if extn_type != TLSHelloExtensionType.EXTENDED_MASTER_SECRET:
             raise DecodeError(f"TLSExtendedMasterSecretExtension: Extension type is not EXTENDED_MASTER_SECRET. Found: {extn_type}")
 
-        return TLSExtendedMasterSecretExtension(*args, **kwargs)
+        return TLSExtendedMasterSecretExtension(**kwargs)
 
 
 class TLSRenegotiationInformation(TLSHelloExtension):
@@ -589,8 +591,9 @@ class TLSRenegotiationInformation(TLSHelloExtension):
         Although, for editorial simplicity, this document refers to TLS, all
         requirements in this document apply equally to DTLS.
     """
-    def __init__(self, extension_data: bytes, *args, **kwargs):
-        super().__init__(TLSHelloExtensionType.RENEGOTIATION_INFORMATION, *args, **kwargs)
+
+    def __init__(self, extension_data: bytes, **kwargs):
+        super().__init__(TLSHelloExtensionType.RENEGOTIATION_INFORMATION, **kwargs)
         self._extension_data = extension_data
 
     @property
@@ -598,7 +601,7 @@ class TLSRenegotiationInformation(TLSHelloExtension):
         return self._extension_data
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSExtendedMasterSecretExtension', None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSExtendedMasterSecretExtension', None]:
         # type(2) + length(2)
         required = 2 + 2
         frame_len = len(frame)
@@ -626,5 +629,4 @@ class TLSRenegotiationInformation(TLSHelloExtension):
         else:
             extn_data = b""
 
-        return TLSRenegotiationInformation(extn_data,*args, **kwargs)
-
+        return TLSRenegotiationInformation(extn_data, **kwargs)

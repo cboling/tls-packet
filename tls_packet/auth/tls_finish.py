@@ -223,7 +223,7 @@ from https://wiki.osdev.org/TLS_Handshake#Certificate_Message
         raise NotImplementedError("TODO: just a cut&paste stub for now.  nowhere close to what it should be") \
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, **kwargs) -> Union[TLSHandshake, None]:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:

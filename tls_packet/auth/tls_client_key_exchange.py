@@ -79,9 +79,9 @@ class TLSClientKeyExchange(TLSHandshake):
               } exchange_keys;
 
     """
-    def __init__(self, *args,
-                 key: Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, bytes] = None, **kwargs):
-        super().__init__(TLSHandshakeType.CLIENT_KEY_EXCHANGE, *args, **kwargs)
+
+    def __init__(self, key: Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, bytes] = None, **kwargs):
+        super().__init__(TLSHandshakeType.CLIENT_KEY_EXCHANGE, **kwargs)
 
         if key is None or isinstance(key, bytes):
             self._encoding = TLSClientKeyEncoding.UNKNOWN
@@ -103,7 +103,7 @@ class TLSClientKeyExchange(TLSHandshake):
         return self._key
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:

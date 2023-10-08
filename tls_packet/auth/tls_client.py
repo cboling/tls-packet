@@ -17,18 +17,16 @@
 import logging
 import os
 import sys
-
 from datetime import datetime
 from typing import Tuple, Optional, List, Iterable, Dict, Any, Union
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.auth.security_params import TLSKeyExchangeTypes
 from tls_packet.auth.tls import TLS, TLSv1, TLSv1_2
 from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_state_machine import TLSClientStateMachine
 from tls_packet.packet import Packet
-
-from tls_packet.auth.security_params import TLSKeyExchangeTypes
 
 logger = logging.getLogger(__name__)
 
@@ -312,11 +310,11 @@ class TLSClient:
         else:
             print(f"EAP Possible duplicate (ID != expected): {eap_id} != {expected_id}")
 
-    def send_response(self, eap_id: int, data: bytes, *args, **kwargs):
+    def send_response(self, eap_id: int, data: bytes, **kwargs):
         print(f"*** This EAP ID: {eap_id}, EAP-LAST-ID: {self.eap_tls_last_id}")
         self._eap_tls_last_sent_id = eap_id
         self._eap_tls_last_sent_data = data
-        self.auth_socket.send_response(eap_id, data, *args, **kwargs)
+        self.auth_socket.send_response(eap_id, data, **kwargs)
 
     def save_client_record(self, record: Union["TLSRecord", List["TLSRecord"]]) -> None:
         """ Save off client records so that TLSFinish can be correctly created """

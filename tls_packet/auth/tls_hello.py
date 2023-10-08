@@ -62,5 +62,5 @@ class TLSHelloRequest(TLSHandshake):
         super().__init__(TLSHandshakeType.HELLO_REQUEST, length=0, session=None, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         return TLSHelloRequest(original_frame=frame, **kwargs)

@@ -31,11 +31,11 @@ class TLSServerHelloDone(TLSHandshake):
         struct { } ServerHelloDone;
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(TLSHandshakeType.SERVER_HELLO_DONE, *args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(TLSHandshakeType.SERVER_HELLO_DONE, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerHelloDone """
         required = 4
         frame_len = len(frame)

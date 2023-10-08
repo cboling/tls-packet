@@ -97,9 +97,9 @@ class TLSClientHello(TLSHandshake):
         return self._session
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
-        return PacketPayload.parse(frame, *args, **kwargs)
+        return PacketPayload.parse(frame, **kwargs)
 
     def pack(self, max_depth: Optional[int] = PARSE_ALL, payload: Optional[Union[bytes, None]] = None) -> bytes:
         # Version + Random + Length of session ID

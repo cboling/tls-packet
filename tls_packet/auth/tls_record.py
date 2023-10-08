@@ -88,7 +88,7 @@ class TLSRecord(Packet):
         return self._content_type
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> Union[List['TLSRecord'], None]:
+    def parse(frame: bytes, **kwargs) -> Union[List['TLSRecord'], None]:
         """
             https://www.ietf.org/rfc/rfc5246.txt
 
@@ -175,7 +175,7 @@ class TLSRecord(Packet):
                     TLSRecordContentType.APPLICATION_DATA:   TLSApplicationDataRecord,
                 }.get(content_type)
                 print(f"TLSRecord:parse. Before Decompression: {frame.hex()}")
-                record = record_type.parse(frame, compression, *args, **kwargs)
+                record = record_type.parse(frame, compression, **kwargs)
 
                 if record is None:
                     DecodeError(f"Failed to decode TLSRecord. {len} records so far and remaining frame length was {len(frame)}")
@@ -232,7 +232,7 @@ class TLSChangeCipherSpecRecord(TLSRecord):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL,
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL,
               **kwargs) -> Union['TLSChangeCipherSpecRecord', None]:
         raise NotImplementedError("Not yet implemented")
 
@@ -246,7 +246,7 @@ class TLSAlertRecord(TLSRecord):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, compression, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSAlertRecord', None]:
+    def parse(frame: bytes, compression, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSAlertRecord', None]:
         raise NotImplementedError("Not yet implemented")
 
 
@@ -265,7 +265,7 @@ class TLSHandshakeRecord(TLSRecord):
         return super().pack(payload=bytes(self._handshake))
 
     @staticmethod
-    def parse(frame: bytes, compression, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSHandshakeRecord', None]:
+    def parse(frame: bytes, compression, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSHandshakeRecord', None]:
         # Decompress if needed
         #     Type = frame[0]
         #  Version = frame[1..2]
@@ -290,10 +290,10 @@ class TLSHandshakeRecord(TLSRecord):
             # Parse the handshake message
             from tls_packet.auth.tls_handshake import TLSHandshake
 
-            handshake = TLSHandshake.parse(payload, *args, max_depth=max_depth - 1, **kwargs)
+            handshake = TLSHandshake.parse(payload, max_depth=max_depth - 1, **kwargs)
         else:
             # Save it as blob data (note that we use the decompressed data)
-            handshake = PacketPayload(payload, *args, **kwargs)
+            handshake = PacketPayload(payload, **kwargs)
 
         return TLSHandshakeRecord(handshake, tls_version=tls_version, length=msg_len, original_frame=frame)
 
@@ -307,5 +307,5 @@ class TLSApplicationDataRecord(TLSRecord):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, compression, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSApplicationDataRecord', None]:
+    def parse(frame: bytes, compression, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSApplicationDataRecord', None]:
         raise NotImplementedError("Not yet implemented")

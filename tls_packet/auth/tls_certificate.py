@@ -16,7 +16,6 @@
 
 import struct
 import sys
-
 from cryptography.x509 import load_der_x509_certificate
 from typing import Union, Optional, List, Tuple, Iterable
 
@@ -285,8 +284,9 @@ class TLSCertificate(TLSHandshake):
         0x00046D: certificate #2 length=1133
         0x3080...4998: second certificate (ASN.1 encoded)
     """
-    def __init__(self, certificates: ASN_1_CertList, *args, **kwargs):
-        super().__init__(TLSHandshakeType.CERTIFICATE, *args, **kwargs)
+
+    def __init__(self, certificates: ASN_1_CertList, **kwargs):
+        super().__init__(TLSHandshakeType.CERTIFICATE, **kwargs)
 
         self._certificates = certificates
 
@@ -295,7 +295,7 @@ class TLSCertificate(TLSHandshake):
         return self._certificates.certificate_list
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSCertificate """
         required = 4
         frame_len = len(frame)
@@ -336,7 +336,7 @@ class TLSCertificate(TLSHandshake):
         if security_params is not None and certificates.certificate_list:
             security_params.server_public_certificate = certificates.certificate_list[0].x509_certificate
 
-        return TLSCertificate(certificates, length=msg_len, *args, **kwargs, original_frame=frame)  # TODO: later ->  , extensions = extensions)
+        return TLSCertificate(certificates, length=msg_len, **kwargs, original_frame=frame)  # TODO: later ->  , extensions = extensions)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         """

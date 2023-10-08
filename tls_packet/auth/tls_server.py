@@ -251,11 +251,11 @@ class TLSServer:
         else:
             print(f"EAP Possible duplicate (ID != expected): {eap_id} != {expected_id}")
 
-    def send_response(self, eap_id: int, data: bytes, *args, **kwargs):
+    def send_response(self, eap_id: int, data: bytes, **kwargs):
         print(f"*** This EAP ID: {eap_id}, EAP-LAST-ID: {self.eap_tls_last_id}")
         self._eap_tls_last_sent_id = eap_id
         self._eap_tls_last_sent_data = data
-        self.auth_socket.send_response(eap_id, data, *args, **kwargs)
+        self.auth_socket.send_response(eap_id, data, **kwargs)
 
     def save_client_record(self, record: Union["TLSRecord", List["TLSRecord"]]) -> None:
         """ Save off client records so that TLSFinish can be correctly created """

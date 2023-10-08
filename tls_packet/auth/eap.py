@@ -88,7 +88,7 @@ class EAP(Packet):
         return self._eap_id
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EAP':
+    def parse(frame: bytes, **kwargs) -> 'EAP':
         """
         """
         if frame is None:
@@ -112,7 +112,7 @@ class EAP(Packet):
             }.get(eap_code)
 
             print(f"EAPOL.parse: Before Decompression: {frame.hex()}")
-            packet = frame_type.parse(frame, eap_id, length, *args, **kwargs)
+            packet = frame_type.parse(frame, eap_id, length, **kwargs)
 
             if packet is None:
                 raise DecodeError(f"Failed to decode EAPOL: {frame_type}")
@@ -123,7 +123,7 @@ class EAP(Packet):
             raise DecodeError from e
 
     @staticmethod
-    def parse_eap_type(eap_type: EapType, frame: bytes, *args, **kwargs) -> Packet:
+    def parse_eap_type(eap_type: EapType, frame: bytes, **kwargs) -> Packet:
         from tls_packet.auth.eap_tls import EapTls
         try:
             parser = {
@@ -136,7 +136,7 @@ class EAP(Packet):
                 EapType.EAP_TTLS:               EapTtls,
             }.get(eap_type)
 
-            packet = parser.parse(frame, *args, **kwargs)
+            packet = parser.parse(frame, **kwargs)
 
             if packet is None:
                 raise DecodeError(f"Failed to decode EAPOL: {parser}")
@@ -174,7 +174,7 @@ class EapRequest(EAP):
         return super().pack(payload=payload)
 
     @staticmethod
-    def parse(frame: bytes, ident: int, length: int, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'EapRequest':
+    def parse(frame: bytes, ident: int, length: int, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'EapRequest':
         offset = 4
         required = length
 
@@ -187,10 +187,10 @@ class EapRequest(EAP):
 
         if max_depth > 0:
             # Parse the handshake message
-            payload = EapRequest.parse_eap_type(eap_type, payload_data, *args, max_depth=max_depth-1, **kwargs)
+            payload = EapRequest.parse_eap_type(eap_type, payload_data, max_depth=max_depth - 1, **kwargs)
         else:
             # Save it as blob data (note that we use the decompressed data)
-            payload = PacketPayload(payload_data, *args, **kwargs)
+            payload = PacketPayload(payload_data, **kwargs)
 
         return EapRequest(eap_type, payload, length=length - 5, **kwargs)
 
@@ -210,7 +210,7 @@ class EapResponse(EAP):
         return super().pack(payload=payload)
 
     @staticmethod
-    def parse(frame: bytes, ident: int, length: int, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['EapResponse', None]:
+    def parse(frame: bytes, ident: int, length: int, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['EapResponse', None]:
         offset = 4
         required = length
 
@@ -223,10 +223,10 @@ class EapResponse(EAP):
 
         if max_depth > 0:
             # Parse the handshake message
-            payload = EapRequest.parse_eap_type(eap_type, payload_data, *args, max_depth=max_depth-1, **kwargs)
+            payload = EapRequest.parse_eap_type(eap_type, payload_data, max_depth=max_depth - 1, **kwargs)
         else:
             # Save it as blob data (note that we use the decompressed data)
-            payload = PacketPayload(payload_data, *args, **kwargs)
+            payload = PacketPayload(payload_data, **kwargs)
 
         return EapResponse(eap_type, payload, length=length - 5, **kwargs)
 
@@ -236,7 +236,7 @@ class EapSuccess(EAP):
         super().__init__(EapCode.EAP_SUCCESS, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, ident: int, length: int, *args, **kwargs) -> 'EapSuccess':
+    def parse(frame: bytes, ident: int, length: int, **kwargs) -> 'EapSuccess':
         return EapSuccess(eap_id=ident, length=length, **kwargs)
 
 
@@ -245,7 +245,7 @@ class EapFailure(EAP):
         super().__init__(EapCode.EAP_FAILURE, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, ident: int, length: int, *args, **kwargs) -> 'EapFailure':
+    def parse(frame: bytes, ident: int, length: int, **kwargs) -> 'EapFailure':
         return EapFailure(eap_id=ident, length=length, **kwargs)
 
 
@@ -258,7 +258,7 @@ class EapInitiate(EAP):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, ident: int, length: int, *args, **kwargs) -> 'EapInitiate':
+    def parse(frame: bytes, ident: int, length: int, **kwargs) -> 'EapInitiate':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -271,7 +271,7 @@ class EapFinish(EAP):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, ident: int, length: int, *args, **kwargs) -> 'EapFinish':
+    def parse(frame: bytes, ident: int, length: int, **kwargs) -> 'EapFinish':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -345,7 +345,7 @@ class EapIdentity(EapPacket):
         return self._type_data
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapIdentity':
+    def parse(frame: bytes, **kwargs) -> 'EapIdentity':
         length = len(frame)
 
         if len(frame) < length:
@@ -417,7 +417,7 @@ class EapLegacyNak(EapPacket):
         return super().pack(payload=buffer)
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapLegacyNak':
+    def parse(frame: bytes, **kwargs) -> 'EapLegacyNak':
         length = len(frame)
 
         # Always at least one octet of type-data
@@ -491,7 +491,7 @@ class EapMd5Challenge(EapPacket):
         return super().pack(payload=buffer)
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapMd5Challenge':
+    def parse(frame: bytes, **kwargs) -> 'EapMd5Challenge':
         length = len(frame)
 
         if len(frame) < length:
@@ -545,7 +545,7 @@ class EapOneTimePassword(EapPacket):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapOneTimePassword':
+    def parse(frame: bytes, **kwargs) -> 'EapOneTimePassword':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -590,7 +590,7 @@ class EapGenericTokenCard(EapPacket):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapGenericTokenCard':
+    def parse(frame: bytes, **kwargs) -> 'EapGenericTokenCard':
         raise NotImplementedError("Not yet implemented")
 
 
@@ -605,5 +605,5 @@ class EapTtls(EapPacket):
         raise NotImplementedError("Not yet implemented")
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> 'EapTtls':
+    def parse(frame: bytes, **kwargs) -> 'EapTtls':
         raise NotImplementedError("Not yet implemented")

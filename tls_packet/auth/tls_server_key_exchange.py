@@ -15,10 +15,9 @@
 # -------------------------------------------------------------------------
 
 import struct
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from enum import IntEnum
 from typing import Union, Optional
-
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.security_params import TLSKeyExchangeTypes
@@ -267,8 +266,8 @@ class TLSServerKeyExchange(TLSHandshake):
                                      ServerKeyExchange.params;
     """
 
-    def __init__(self, signature: bytes, key: bytes, server_params: bytes, *args, **kwargs):
-        super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, *args, **kwargs)
+    def __init__(self, signature: bytes, key: bytes, server_params: bytes, **kwargs):
+        super().__init__(TLSHandshakeType.SERVER_KEY_EXCHANGE, **kwargs)
         self._signature = signature
         self._server_params = server_params
         self._key = key
@@ -291,8 +290,7 @@ class TLSServerKeyExchange(TLSHandshake):
         return True
 
     @staticmethod
-    def parse(frame: bytes, *args,
-              **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
 
         # type(1) + length(3) + remainder based on key algorithm
@@ -317,13 +315,13 @@ class TLSServerKeyExchange(TLSHandshake):
             raise DecodeError(f"TLSServerKeyExchange: Key Exchange message truncated: Expected at least {msg_len} bytes, got: {frame_len - offset}")
 
         if key_exchange_type == TLSKeyExchangeTypes.RSA:
-            return TLSServerKeyExchangeRSA.parse(frame[4:], *args, **kwargs)
+            return TLSServerKeyExchangeRSA.parse(frame[4:], **kwargs)
 
         elif key_exchange_type == TLSKeyExchangeTypes.DHE:
-            return TLSServerKeyExchangeDH.parse(frame[4:], *args, **kwargs)
+            return TLSServerKeyExchangeDH.parse(frame[4:], **kwargs)
 
         elif key_exchange_type == TLSKeyExchangeTypes.ECDHE:
-            return TLSServerKeyExchangeECDH.parse(frame[4:], *args, **kwargs)
+            return TLSServerKeyExchangeECDH.parse(frame[4:], **kwargs)
 
         else:
             raise DecodeError(f"Unsupported Key Exchange Type: {key_exchange_type}")
@@ -425,8 +423,12 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
                                      ServerKeyExchange.params;
     """
     def __init__(self, curve_type: ECCurveType, named_curve: NamedCurve,
-                 public_key: bytes, signature: bytes, server_params: bytes, *args, **kwargs):
-        super().__init__(signature, public_key, server_params, *args, **kwargs)
+                 public_key: bytes, signature: bytes, server_params: Optional[bytes] = b"", **kwargs):
+        if not server_params:
+            # TODO If server_parms are empty, construct from what was provided
+            pass
+
+        super().__init__(signature, public_key, server_params, **kwargs)
 
         if curve_type in (ECCurveType.EXPLICIT_PRIME, ECCurveType.EXPLICIT_CHAR2):
             # TODO: See if deprecated in TLSv1.1 or TLSv1.2 and add support if needed/requested
@@ -444,8 +446,7 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
         return self._named_curve
 
     @staticmethod
-    def parse(frame: bytes, *args,
-              tls_version: Optional[TLS] = None,
+    def parse(frame: bytes, tls_version: Optional[TLS] = None,
               max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
         curve_type = ECCurveType(frame[0])
@@ -483,8 +484,7 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
         # } ServerECDHParams;
         server_params = frame[0:4] + pubkey
 
-        return TLSServerKeyExchangeECDH(curve_type, named_curve, pubkey, signature, server_params,
-                                        *args, **kwargs)
+        return TLSServerKeyExchangeECDH(curve_type, named_curve, pubkey, signature, server_param=server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
@@ -492,18 +492,17 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
 
 class TLSServerKeyExchangeDH(TLSServerKeyExchange):
 
-    def __init__(self, signature: bytes, server_params: bytes, *args, **kwargs):
-        super().__init__(signature, server_params, *args, **kwargs)
+    def __init__(self, signature: bytes, server_params: bytes, **kwargs):
+        super().__init__(signature, server_params, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args,
-              tls_version: Optional[TLS] = None,
+    def parse(frame: bytes, tls_version: Optional[TLS] = None,
               max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
 
         signature = b""
         server_params = b""
-        return TLSServerKeyExchangeDH(signature, server_params, *args, **kwargs)
+        return TLSServerKeyExchangeDH(signature, server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
@@ -511,17 +510,16 @@ class TLSServerKeyExchangeDH(TLSServerKeyExchange):
 
 class TLSServerKeyExchangeRSA(TLSServerKeyExchange):
 
-    def __init__(self, signature: bytes, server_params: bytes, *args, **kwargs):
-        super().__init__(signature, server_params, *args, **kwargs)
+    def __init__(self, signature: bytes, server_params: bytes, **kwargs):
+        super().__init__(signature, server_params, **kwargs)
 
     @staticmethod
-    def parse(frame: bytes, *args,
-              tls_version: Optional[TLS] = None,
+    def parse(frame: bytes, tls_version: Optional[TLS] = None,
               max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
         signature = b""
         server_params = b""
-        return TLSServerKeyExchangeRSA(signature, server_params, *args, **kwargs)
+        return TLSServerKeyExchangeRSA(signature, server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

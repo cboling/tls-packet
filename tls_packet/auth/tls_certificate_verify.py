@@ -68,8 +68,8 @@ class TLSCertificateVerify(TLSHandshake):
         are to be used with DSA.
     """
 
-    def __init__(self, signature: Optional[bytes] = None, *args, **kwargs):
-        super().__init__(TLSHandshakeType.CERTIFICATE_VERIFY, *args, **kwargs)
+    def __init__(self, signature: Optional[bytes] = None, **kwargs):
+        super().__init__(TLSHandshakeType.CERTIFICATE_VERIFY, **kwargs)
         self._signature = signature
 
     @property
@@ -77,7 +77,7 @@ class TLSCertificateVerify(TLSHandshake):
         return self._signature
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSCertificateRequest """
 
         # type(1) + length(3) + sig_len(2)
@@ -98,7 +98,7 @@ class TLSCertificateVerify(TLSHandshake):
         if len(sig_frame) < sig_len:
             raise DecodeError(f"TLSCertificateRequest: message sinature truncated: Expected at least {sig_len} bytes, got: {len(sig_frame)}")
 
-        return TLSCertificateVerify(*args, signature=sig_frame, original_frame=frame, **kwargs)
+        return TLSCertificateVerify(signature=sig_frame, original_frame=frame, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         # sig_len = struct.pack("!H", len(self._signature))

@@ -107,8 +107,8 @@ class TLSCertificateRequest(TLSHandshake):
           unless there is some external arrangement to the contrary.
     """
 
-    def __init__(self, certificate_types: Iterable[CertificateType], dsn: bytes, *args, **kwargs):
-        super().__init__(TLSHandshakeType.CERTIFICATE_REQUEST, *args, **kwargs)
+    def __init__(self, certificate_types: Iterable[CertificateType], dsn: bytes, **kwargs):
+        super().__init__(TLSHandshakeType.CERTIFICATE_REQUEST, **kwargs)
 
         self._certificate_types = tuple(certificate_types)
         self._dsn = dsn
@@ -122,7 +122,7 @@ class TLSCertificateRequest(TLSHandshake):
         return b"" + self._dsn if self._dsn else b""
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSCertificateRequest """
 
         # type(1) + length(3) + cert-count(1) + certs(0..n) + DSN len (1) + dsn (0..n)
@@ -160,7 +160,7 @@ class TLSCertificateRequest(TLSHandshake):
 
         dsn = frame[offset:offset + dns_length]
 
-        return TLSCertificateRequest(certificate_types, dsn, *args, length=msg_len, original_frame=frame, **kwargs)
+        return TLSCertificateRequest(certificate_types, dsn, length=msg_len, original_frame=frame, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

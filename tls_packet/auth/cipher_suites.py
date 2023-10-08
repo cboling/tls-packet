@@ -3,17 +3,17 @@
 import math
 from copy import deepcopy
 from typing import Optional, Iterable, Union, Type, Dict, Any
+
+from tls_packet.auth.encryption_algorithms import AES, AESGCM
+from tls_packet.auth.security_params import TLSKeyExchangeTypes, TLSAuthentication
+from tls_packet.auth.tls import TLS, TLSv1, TLSv1_1, TLSv1_2, TLSv1_3
+from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm
+
 # import constants
 # import encryption_algorithms
 # import key_exchange
 # import signature_algorithms
 # from prf import prf as _prf
-
-
-from tls_packet.auth.tls import TLS, TLSv1, TLSv1_1, TLSv1_2, TLSv1_3
-from tls_packet.auth.security_params import TLSKeyExchangeTypes, TLSAuthentication
-from tls_packet.auth.encryption_algorithms import AES, AESGCM
-from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm
 
 CipherSuiteDict = Type[Dict[int, Dict[str, Any]]]
 
@@ -1230,7 +1230,7 @@ class CipherSuite:
             'hash_algorithm': self.signature_algorithm,
             'sign_key': self.keys['{}_write_mac_key'.format(encrypt_from)]
         }
-        return self.encryption_algorithm.encrypt(*args, **kwargs)
+        return self.encryption_algorithm.encrypt(**kwargs)
 
     def decrypt(self, encrypted_bytes, *, seq_num, content_type, decrypt_from='server'):
         key = self.keys['{}_write_key'.format(decrypt_from)]

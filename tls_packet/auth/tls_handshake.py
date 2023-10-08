@@ -116,7 +116,7 @@ class TLSHandshake(Packet):
         return self._msg_type
 
     @staticmethod
-    def parse(frame: bytes, *args, **kwargs) -> Union['TLSHandshake', None]:
+    def parse(frame: bytes, **kwargs) -> Union['TLSHandshake', None]:
         if frame is None:
             raise DecodeError("TLSHandshake.parse: Called with frame = None")
 
@@ -160,7 +160,7 @@ class TLSHandshake(Packet):
             # This is not a layer, the message parsed below is the handshake layer. So do not
             # decrement max_depth or check if it is zero
             print(f"msg_class is: {msg_class}")
-            return msg_class.parse(frame, *args, **kwargs) if msg_class else None
+            return msg_class.parse(frame, **kwargs) if msg_class else None
 
         except (ValueError, KeyError) as e:
             raise DecodeError from e

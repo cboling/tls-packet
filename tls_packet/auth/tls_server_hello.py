@@ -102,7 +102,7 @@ class TLSServerHello(TLSHandshake):
         return self._random_bytes
 
     @staticmethod
-    def parse(frame: bytes, *args, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSSessionHello """
 
         # type(1) + length(3) + version(2), random(32) + session(1) + cipher_suite(2) + compression(1) + extension_length + extensions(0..65536)
