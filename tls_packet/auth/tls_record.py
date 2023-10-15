@@ -40,6 +40,20 @@ class TLSRecordContentType(IntEnum):
         return val in cls._value2member_map_
 
 
+class TLSChangeCipherSpecType(IntEnum):
+    """
+    TLS Change Cipher Spec Codes
+    """
+    CHANGE_CIPHER_SPEC = 1
+
+    def name(self) -> str:
+        return super().name.replace("_", " ").capitalize()
+
+    @classmethod
+    def has_value(cls, val: int) -> bool:
+        return val in cls._value2member_map_
+
+
 class TLSRecord(Packet):
     """
     Base TLS Record class
@@ -220,21 +234,62 @@ class TLSRecord(Packet):
 
 
 class TLSChangeCipherSpecRecord(TLSRecord):
-    def __init__(self, data, **kwargs):
+    """
+    The change cipher spec protocol exists to signal transitions in
+    ciphering strategies. The protocol consists of a single message,
+    which is encrypted and compressed under the current (not the pending)
+    connection state. The message consists of a single byte of value 1.
+
+        struct {
+            enum { change_cipher_spec(1), (255) } type;
+        } ChangeCipherSpec;
+
+    The change cipher spec message is sent by both the client and server
+    to notify the receiving party that subsequent records will be
+    protected under the newly negotiated CipherSpec and keys. Reception
+    of this message causes the receiver to instruct the Record Layer to
+    immediately copy the read pending state into the read current state.
+    Immediately after sending this message, the sender should instruct
+    the record layer to make the write pending state the write active
+    state. (See section 6.1.) The change cipher spec message is sent
+    during the handshake after the security parameters have been agreed
+    upon, but before the verifying finished message is sent
+    """
+
+    def __init__(self, spec_type: TLSChangeCipherSpecType, **kwargs):
         super().__init__(TLSRecordContentType.CHANGE_CIPHER_SPEC, None, **kwargs)
-        self._data = data
+        self._spec_type = spec_type
 
     @property
-    def data(self) -> bytes:
-        return self._data
+    def spec_type(self) -> TLSChangeCipherSpecType:
+        return self._spec_type
 
-    def pack(self, **argv) -> bytes:
-        raise NotImplementedError("Not yet implemented")
+    def pack(self) -> bytes:
+        payload = struct.pack("!B", self._spec_type)
+        return super().pack(payload=payload)
 
     @staticmethod
-    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL,
-              **kwargs) -> Union['TLSChangeCipherSpecRecord', None]:
-        raise NotImplementedError("Not yet implemented")
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'TLSChangeCipherSpecRecord':
+        required = 5
+        frame_len = len(frame)
+
+        if frame_len < required:
+            raise DecodeError(f"TLSChangeCipherSpecRecord: message truncated: Expected at least {required} bytes, got: {frame_len}")
+
+        content_type = TLSRecordContentType(frame[0])
+        if content_type != TLSRecordContentType.CHANGE_CIPHER_SPEC:
+            raise DecodeError(f"TLSChangeCipherSpecRecord: Message type is not CHANGE_CIPHER_SPEC. Found: {content_type}")
+
+        tls_version = TLS.get_by_code(frame[1:3])
+        if tls_version is None:
+            raise DecodeError(f"TLSChangeCipherSpecRecord: unrecognized TLS version '{frame[1:3].hex()}'")
+
+        msg_len = int.from_bytes(frame[3:5], 'big')
+        if msg_len != 1:
+            raise DecodeError(f"TLSChangeCipherSpecRecord: Unexpected message length. Expected 1, got {msg_len}")
+
+        spec_type = TLSChangeCipherSpecType(frame[5])
+        return TLSChangeCipherSpecRecord(spec_type)
 
 
 class TLSAlertRecord(TLSRecord):
@@ -265,7 +320,7 @@ class TLSHandshakeRecord(TLSRecord):
         return super().pack(payload=bytes(self._handshake))
 
     @staticmethod
-    def parse(frame: bytes, compression, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union['TLSHandshakeRecord', None]:
+    def parse(frame: bytes, compression, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> 'TLSHandshakeRecord':
         # Decompress if needed
         #     Type = frame[0]
         #  Version = frame[1..2]
@@ -279,7 +334,7 @@ class TLSHandshakeRecord(TLSRecord):
             raise DecodeError(f"TLSHandshakeRecord: unrecognized TLS version '{frame[1:3].hex()}'")
 
         msg_len = struct.unpack_from("!H", frame, 3)[0]
-        if msg_len > len(frame) - 5:
+        if msg_len > len(frame) - 5:  # TODO: SHOULD THIS BE 7
             raise DecodeError(f"TLSHandshakeRecord: Truncated payload. Only {len(frame) - 7} octets. Message Header Length: {msg_len}")
 
         # TODO: Limit data passed to 5+msg_len below so we only pass this record

@@ -57,7 +57,9 @@ class TLSClient:
         # Client random data is 32 bytes long
         client_random = random_data or int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
 
-        # Keep separate send/receive parameters so we can handle various receive sequences from server
+        # Runtime performance options   TODO: Provide a way for users to set these
+        self.verify_server_certificate = False
+        self.verify_server_key_exchange = True
 
         # self._receive_security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)
         # self._send_security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)

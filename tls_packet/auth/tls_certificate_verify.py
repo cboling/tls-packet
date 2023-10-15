@@ -17,6 +17,7 @@
 import struct
 from typing import Union, Optional
 
+from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import DecodeError, PARSE_ALL
 

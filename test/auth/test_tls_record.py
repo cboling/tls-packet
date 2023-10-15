@@ -16,10 +16,10 @@
 # pylint: skip-file
 
 import unittest
-
 from mocks.util import assertGeneratedFrameEquals
+
 from tls_packet.auth.security_params import SecurityParameters
-from tls_packet.auth.tls_record import TLSRecordContentType, TLSRecord, TLSChangeCipherSpecRecord
+from tls_packet.auth.tls_record import TLSRecordContentType, TLSRecord, TLSChangeCipherSpecRecord, TLSChangeCipherSpecType
 from tls_packet.packet import DecodeError
 
 
@@ -77,33 +77,29 @@ class TestTLSRecord(unittest.TestCase):
 class TestTLSChangeCipherSpec(unittest.TestCase):
     @classmethod
     def setUp(cls):
-        cls.change_data = "01"
+        cls.change_data = TLSChangeCipherSpecType.CHANGE_CIPHER_SPEC
         cls.security_params = SecurityParameters()
 
     def test_RecordSerialize(self):
-        change = TLSChangeCipherSpecRecord(bytes.fromhex(self.change_data))
+        change = TLSChangeCipherSpecRecord(self.change_data)
+        self.assertEqual(change.spec_type, self.change_data)
 
-        with self.assertRaises(NotImplementedError):
-            # TODO Add support
-            expected = "140301000101"
-            assertGeneratedFrameEquals(self, change.pack(), expected)
+        expected = "140301000101"
+        assertGeneratedFrameEquals(self, change.pack(), expected)
 
     def test_RecordDecode(self):
         # Construct frame
         record_frame = "140301000101"
+        records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
 
-        with self.assertRaises(NotImplementedError):
-            # TODO Add support
-            records = TLSRecord.parse(bytes.fromhex(record_frame), security_params=self.security_params)
+        self.assertIsNotNone(records)
+        self.assertIsInstance(records, list)
+        self.assertEqual(len(records), 1)
 
-            self.assertIsNotNone(records)
-            self.assertIsInstance(records, list)
-            self.assertEqual(len(records), 1)
-
-            record = records[0]
-            self.assertIsInstance(record, TLSChangeCipherSpecRecord)
-            self.assertEqual(record.content_type, TLSRecordContentType.CHANGE_CIPHER_SPEC)
-            self.assertEqual(record.data.hex(), self.change_data)
+        record = records[0]
+        self.assertIsInstance(record, TLSChangeCipherSpecRecord)
+        self.assertEqual(record.content_type, TLSRecordContentType.CHANGE_CIPHER_SPEC)
+        self.assertEqual(record.spec_type, self.change_data)
 
 
 if __name__ == '__main__':

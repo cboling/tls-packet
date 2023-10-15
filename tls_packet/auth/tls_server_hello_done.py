@@ -45,7 +45,7 @@ class TLSServerHelloDone(TLSHandshake):
 
         msg_type = TLSHandshakeType(frame[0])
         if msg_type != TLSHandshakeType.SERVER_HELLO_DONE:
-            raise DecodeError(f"TLSSessionHello: Message type is not SERVER_HELLO_DONE. Found: {msg_type}")
+            raise DecodeError(f"TLSServerHelloDone: Message type is not SERVER_HELLO_DONE. Found: {msg_type}")
 
         msg_len = int.from_bytes(frame[1:4], 'big')
 
