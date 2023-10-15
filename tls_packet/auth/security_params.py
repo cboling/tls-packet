@@ -16,11 +16,11 @@
 
 import copy
 import os
+from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes, PrivateKeyTypes
+from cryptography.x509 import Certificate
 from datetime import datetime
 from enum import IntEnum
-from typing import Optional
-
-from cryptography.x509 import Certificate
+from typing import Optional, Union
 
 from tls_packet.auth.tls import TLS
 
@@ -102,7 +102,9 @@ class SecurityParameters:
                  master_secret: Optional[bytes] = None,
                  client_random: Optional[bytes] = None,
                  server_random: Optional[bytes] = None,
-                 server_public_key: Optional[bytes] = None,
+                 client_certificate: Optional[Certificate] = None,
+                 client_public_key: Optional[PublicKeyTypes] = None,
+                 server_public_key: Optional[PublicKeyTypes] = None,
                  server_certificate: Optional[Certificate] = None,
                  cipher_suite: Optional['CipherSuite'] = None):
 
@@ -112,15 +114,40 @@ class SecurityParameters:
         self.tls_version = tls_version
         self.prf_algorithm = prf_algorithm
         self.compression_algorithm = compression_algorithm
+
         self.master_secret = master_secret
+
         self.client_random = client_random
+        self.client_certificate = client_certificate
+        self._client_public_key = client_public_key
+        self._client_private_key = None
+
         self.server_random = server_random
-        self.server_public_key = server_public_key
         self.server_certificate = server_certificate
+        self._server_public_key = server_public_key
+
         self.cipher_suite = cipher_suite
 
         # Ones from ssl book - TODO  Get rid of these
         # self.master_key: bytes = b""
+
+    @property
+    def client_public_key(self) -> Union[PublicKeyTypes, None]:
+        if self._client_public_key is None and self.client_certificate is not None:
+            self._client_public_key = self.client_certificate.public_key()
+        return self._client_public_key
+
+    @property
+    def client_private_key(self) -> Union[PrivateKeyTypes, None]:
+        if self._client_private_key is None and self.client_certificate is not None:
+            self._client_private_key = self.client_certificate.private_key()
+        return self._client_private_key
+
+    @property
+    def server_public_key(self) -> Union[PublicKeyTypes, None]:
+        if self._server_public_key is None and self.server_certificate is not None:
+            self._server_public_key = self.server_certificate.public_key()
+        return self._server_public_key
 
     def copy(self, **kwargs) -> 'SecurityParameters':
         """ Create a copy of the security parameters and optionally override any existing values """

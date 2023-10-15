@@ -5,9 +5,10 @@ from copy import deepcopy
 from typing import Optional, Iterable, Union, Type, Dict, Any
 
 from tls_packet.auth.encryption_algorithms import AES, AESGCM
+from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.security_params import TLSKeyExchangeTypes, TLSAuthentication
 from tls_packet.auth.tls import TLS, TLSv1, TLSv1_1, TLSv1_2, TLSv1_3
-from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm
+from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm, RsaPkcs1Md5Sha1
 
 # import constants
 # import encryption_algorithms
@@ -1117,7 +1118,6 @@ class CipherSuite:
     def __str__(self):
         return self.properties['openssl_name']  # TODO: Improve this
 
-
     def version_to_tls(version: str) -> Union[TLS, None]:
         return {
             "TLSv1.0": TLSv1(),
@@ -1145,20 +1145,6 @@ class CipherSuite:
     def key_exchange_type(self) -> TLSKeyExchangeTypes:
         return self._key_exchange
 
-    @property
-    def security_parameters(self):
-        enc_algo_class = self.properties.get('encryption_algorithm')
-        sp = {
-            'key_material_length': self.properties.get('key_material_bits') // 8,
-        }
-        if self.properties.get('message_authentication_code') == TLSMACAlgorithm.HMAC_AEAD:
-            sp['hash_size'] = 0
-            sp['IV_size'] = 4
-        else:
-            sp['hash_size'] = self.signature_algorithm.digest_size
-            sp['IV_size'] = 16
-        return sp
-
     @classmethod
     def get_from_id(cls, tls_version, ident):
         cipher = CIPHER_SUITES.get(ident)
@@ -1172,18 +1158,21 @@ class CipherSuite:
     def pre_master_secret(self, value):
         self._derive_key(value)
 
-    def signature_algorithm(self):
+    def signature_algorithm(self, security_params: SecurityParameters):
         # name = self.properties.get('message_authentication_code')
         # if name == 'AEAD':
         #     openssl_name = self.properties.get('openssl_name')
         #     name = openssl_name[openssl_name.rfind('-')+1:]
         #     name = 'SHA1' if name == 'SHA' else name
         # return getattr(signature_algorithms, name)()
-        if self.tls_version >= TLSv1_2():
-             signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
-                                   frame[offset], self.server_cert.public_key()), data_bytes[2:]
+        public_key = security_params.server_public_key
+
+        if security_params.tls_version >= TLSv1_2():
+            raise NotImplementedError("TODO: Need to implement")
+            # signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
+            #                        frame[offset], public_key), data_bytes[2:]
         else:
-            signature_algorithm = signature_algorithms.RsaPkcs1Md5Sha1(self.server_certificate.public_key())
+            signature_algorithm = RsaPkcs1Md5Sha1(public_key)
         return signature_algorithm
 
     @property
@@ -1193,9 +1182,6 @@ class CipherSuite:
         # text = text.split('(')
         # return getattr(encryption_algorithms, text[0])()
         return self._encryption_algorithm
-
-    def parse_key_exchange_params(self, params_bytes):
-        self.key_exchange.parse_params(params_bytes)
 
     def prf(self, secret, label, seed, output_length):
         return prf(self.tls_version, self.signature_algorithm, secret, label, seed, output_length)

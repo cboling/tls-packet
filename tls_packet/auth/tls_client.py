@@ -62,30 +62,6 @@ class TLSClient:
         # self._receive_security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)
         # self._send_security_parameters: SecurityParameters = SecurityParameters().copy(client_random=client_random)
 
-        # TLS breaks it up into pending and active  (Look at state machine and its transitions setting of this)
-        # it uses the following, so tie the values below into what we save here
-        #         self._k_send = ""
-        #         self._k_recv = ""
-        #
-        self._security_parameters = {
-            'active_tx':  SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random),
-            'active_rx':  SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random),
-            'pending_tx': SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random),
-            'pending_rx': SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random)
-        }
-        #  So when we get the server_hello, use the 'pending_send_parameters' to stuff values in and later on during
-        #  server_key_exchange download, use that pending value
-        #
-        # static void init_protection_parameters( ProtectionParameters *parameters )
-        # {
-        #   parameters->MAC_secret = NULL;
-        #   parameters->key = NULL;
-        #   parameters->IV = NULL;
-        #   parameters->seq_num = 0;
-        #   parameters->suite = TLS_NULL_WITH_NULL_NULL;
-        # }
-
-        # self.server_random = None
         self.session_id = session_id
         # TODO: PSK not yet supported
         excluded = (TLSKeyExchangeTypes.RSA_PSK, TLSKeyExchangeTypes.DHE_PSK, TLSKeyExchangeTypes.ECDHE_PSK)
@@ -107,6 +83,23 @@ class TLSClient:
         self.private_key = keys.get("private")
 
         self.tls_session = None
+
+        # TLS breaks it up into pending and active  (Look at state machine and its transitions setting of this)
+        # it uses the following, so tie the values below into what we save here
+        #
+        #         self._k_send = ""
+        #         self._k_recv = ""
+        #
+        self._security_parameters = {
+            'active_tx':  SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+                                                    client_certificate=self.certificate),
+            'active_rx':  SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+                                                    client_certificate=self.certificate),
+            'pending_tx': SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+                                                    client_certificate=self.certificate),
+            'pending_rx': SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+                                                    client_certificate=self.certificate)
+        }
 
         print("*** Not enforcing client EAP-TLS fragmentation yet")
         self.eap_tls_client_data_max_len = 16000

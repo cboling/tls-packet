@@ -17,8 +17,9 @@
 from enum import IntEnum
 from typing import Union, Optional
 
-from tls_packet.auth.diffle_hellman_public_value import ClientDiffieHellmanPublic
-from tls_packet.auth.rsa_premaster_secret import RSAPreMasterSecret
+from tls_packet.auth.master_secret import RSAPreMasterSecret, ClientDiffieHellmanPublic
+from tls_packet.auth.security_params import SecurityParameters
+from tls_packet.auth.security_params import TLSKeyExchangeTypes
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.packet import PARSE_ALL
 
@@ -79,14 +80,15 @@ class TLSClientKeyExchange(TLSHandshake):
               } exchange_keys;
 
     """
-
     def __init__(self, key: Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, bytes] = None, **kwargs):
         super().__init__(TLSHandshakeType.CLIENT_KEY_EXCHANGE, **kwargs)
 
         if key is None or isinstance(key, bytes):
             self._encoding = TLSClientKeyEncoding.UNKNOWN
+
         elif isinstance(key, RSAPreMasterSecret):
             self._encoding = TLSClientKeyEncoding.RSA_PREMASTER_SECRET
+
         elif isinstance(key, ClientDiffieHellmanPublic):
             self._encoding = TLSClientKeyEncoding.CLIENT_DIFFIE_HELLMAN_PUBLIC
         else:
@@ -111,7 +113,7 @@ class TLSClientKeyExchange(TLSHandshake):
         return super().pack(payload=key_buffer)
 
     @staticmethod
-    def create(session: 'TLSClient') -> 'TLSClientKeyExchange':
+    def create(security_params: SecurityParameters) -> 'TLSClientKeyExchange':
         """
         For all key exchange methods, the same algorithm is used to convert
         the pre_master_secret into the master_secret.  The pre_master_secret
@@ -145,33 +147,97 @@ class TLSClientKeyExchange(TLSHandshake):
            Note: Diffie-Hellman parameters are specified by the server and may
            be either ephemeral or contained within the server's certificate.
         """
-        from cryptography.hazmat.primitives import serialization
+        # Look up are required inputs for the pre-master secret
+        server_certificate = security_params.server_certificate
+        server_public_key = security_params.server_public_key
 
-        from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange
-        # Look up what the server sent us
-        server_certificate= next((record.get_layer("TLSCertificate") for record in session.received_handshake_records
-                                  if record.has_layer("TLSCertificate")), None)
-        server_key_exchange = next((record.get_layer("TLSServerKeyExchange") for record in session.received_handshake_records
-                                    if record.has_layer("TLSServerKeyExchange")), None)
+        client_public_key = security_params.client_public_key
+        client_private_key = security_params.client_private_key
 
-        client_public_key = session.public_key
-        client_private_key = session.private_key
+        key_exchange_type = security_params.cipher_suite.key_exchange_type  #
 
-        # Convert server certificate into a serializer/encrypter...
-        if server_certificate is not None:
-            server_public_key = serialization.load_der_public_key(server_certificate.certificate)
-        else:
-            server_public_key = None
+        key_exchange = {
+            TLSKeyExchangeTypes.DHE:   TLSClientKeyExchangeDH,
+            TLSKeyExchangeTypes.ECDHE: TLSClientKeyExchangeECDH,
+            TLSKeyExchangeTypes.RSA:   TLSClientKeyExchangeRSA
+        }.get(key_exchange_type)
 
-        if server_key_exchange is None:
-            raise NotImplementedError("RSA Premaster Secret is not supported")
-            # key = RSAPreMasterSecret(data, server_public_key)
-            # return TLSClientKeyExchange(key)
+        return key_exchange()
 
-        pass
-        pass
-        pass
-        pass
-        pass
-        key = ClientDiffieHellmanPublic()
-        return TLSClientKeyExchange(key)
+
+class TLSClientKeyExchangeDH(TLSClientKeyExchange):
+    """
+    Client Diffie-Hellman Public Value
+
+        This structure conveys the client's Diffie-Hellman public value
+        (Yc) if it was not already included in the client's certificate.
+
+        The encoding used for Yc is determined by the enumerated
+        PublicValueEncoding.  This structure is a variant of the client
+        key exchange message, and not a message in itself.
+
+    Structure of this message:
+
+      enum { implicit, explicit } PublicValueEncoding;
+
+      implicit
+         If the client has sent a certificate which contains a suitable
+         Diffie-Hellman key (for fixed_dh client authentication), then
+         Yc is implicit and does not need to be sent again.  In this
+         case, the client key exchange message will be sent, but it MUST
+         be empty.
+
+      explicit
+         Yc needs to be sent.
+
+      struct {
+          select (PublicValueEncoding) {
+              case implicit: struct { };
+              case explicit: opaque dh_Yc<1..2^16-1>;
+          } dh_public;
+      } ClientDiffieHellmanPublic;
+
+      dh_Yc
+         The client's Diffie-Hellman public value (Yc).
+    """
+
+    def __init__(self):
+        self.x = 0
+
+    @staticmethod
+    def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+        """ Frame to RSAPreMasterSecret """
+        raise NotImplementedError("TODO: Not yet supported")
+
+    def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
+        """
+        For all key exchange methods, the same algorithm is used to convert
+        the pre_master_secret into the master_secret.  The pre_master_secret
+        should be deleted from memory once the master_secret has been
+        computed.
+
+          master_secret = PRF(pre_master_secret, "master secret",
+                              ClientHello.random + ServerHello.random)
+                              [0..47];
+
+        The master secret is always exactly 48 bytes in length.  The length
+        of the premaster secret will vary depending on key exchange method.
+
+           A conventional Diffie-Hellman computation is performed.  The
+           negotiated key (Z) is used as the pre_master_secret, and is converted
+           into the master_secret, as specified above.  Leading bytes of Z that
+           contain all zero bits are stripped before it is used as the
+           pre_master_secret.
+
+           Note: Diffie-Hellman parameters are specified by the server and may
+           be either ephemeral or contained within the server's certificate.
+        """
+        return b''
+
+
+class TLSClientKeyExchangeECDH(TLSClientKeyExchange):
+    pass
+
+
+class TLSClientKeyExchangeRSA(TLSClientKeyExchange):
+    pass

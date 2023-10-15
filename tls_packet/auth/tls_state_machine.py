@@ -23,7 +23,9 @@ from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters, TLSCompressionMethod
 from tls_packet.auth.tls import TLSv1_2
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert
+from tls_packet.auth.tls_certificate_request import TLSCertificateRequest
 from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurve, NamedCurveType
+from tls_packet.auth.tls_record import TLSChangeCipherSpecRecord, TLSChangeCipherSpecType
 from tls_packet.auth.tls_server_hello import TLSServerHello
 from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange
 from tls_packet.auth.tls_signature_algorithm import RsaPkcs1Md5Sha1
@@ -127,12 +129,12 @@ class TLSClientStateMachine(Machine):
         {"trigger": "close", "source": "*", "dest": CLOSE},
     ]
 
-    def __init__(self, session: 'TLSClient', verify_server_certificate: Optional[bool] = False):
+    def __init__(self, session: 'TLSClient'):
         super().__init__(model=self, states=self.STATES, transitions=self.TRANSITIONS,
                          queued=True, initial=self.INITIAL, ignore_invalid_triggers=False)
         self._session = session
         self._closed = False
-        self._verify_server_certificate = verify_server_certificate
+        self._client_certificate_requested = False
         self._k_send = ""  # Make IntEnum
         self._k_recv = ""  # Make IntEnum
 
@@ -154,7 +156,7 @@ class TLSClientStateMachine(Machine):
 
             elif packet.has_layer("TLSCertificateRequest"):
                 print("Rx TLSCertificateRequest")
-                self.rx_certificate_request(eap_id=eap_id, frame=packet.get_layer("TLSCertificateRequest"))
+                self._client_certificate_requested = True
 
             elif any(packet.has_layer(ke_type) for ke_type in ("TLSServerKeyExchangeECDH",
                                                                "TLSServerKeyExchangeDH",
@@ -190,6 +192,9 @@ class TLSClientStateMachine(Machine):
 
     def tx_security_parameters(self, active: Optional[bool] = True) -> SecurityParameters:
         return self._session.tx_security_parameters(active=active)
+
+    def client_certificate_requested(self) -> bool:
+        return self._client_certificate_requested
 
     def using_psk(self, *args, **kwargs) -> bool:
         print(f"TLSClientStateMachine: 'using_psk' condition is currently hardcoded to 'False'")
@@ -317,7 +322,7 @@ class TLSClientStateMachine(Machine):
 
         cert = kwargs.pop("frame", None)
         if isinstance(cert, TLSCertificate):
-            certificates = cert.certificates  # Tuple[ASN_1_Cert]
+            certificates: Tuple[ASN_1_Cert] = cert.certificates
             print(f"Received {len(certificates)} certificates")
 
             if len(certificates) == 0:
@@ -330,54 +335,44 @@ class TLSClientStateMachine(Machine):
             rx_parms = self.rx_security_parameters(active=False)
             tx_parms = self.tx_security_parameters(active=False)
 
-            rx_parms.server_public_certificate = tx_parms.server_public_certificate = x509_cert
-
-            not_valid_after: 'datetime' = x509_cert.not_valid_after
-            not_valid_before: 'datetime' = x509_cert.not_valid_before
-            signature: bytes = x509_cert.signature
-            signature_algorithm_oid: ObjectIdentifier = x509_cert.signature_algorithm_oid
-            signature_hash_algorithm: Union['SHA256', Any] = x509_cert.signature_hash_algorithm
-            issuer: Name = x509_cert.issuer
-            subject: Name = x509_cert.subject
-            extensions: Extensions = x509_cert.extensions
-            tbs_certificate_bytes: bytes = x509_cert.tbs_certificate_bytes
-            version: Version = x509_cert.version
-
-            # {
-            #   x509_certificate tbsCertificate;
-            #   unsigned int *hash; // hash code of tbsCertificate
-            #   int hash_len;
-            #   signatureAlgorithmIdentifier algorithm;
-            #   huge rsa_signature_value;
-            #   dsa_signature dsa_signature_value;
-            # }
+            rx_parms.server_certificate = tx_parms.server_certificate = x509_cert
 
             # Save off the server certificate here as this is a common point
-            if self._verify_server_certificate:
+            if self.session.verify_server_certificate:
                 # TODO: Need to decode full list of certs provided...
+                not_valid_after: 'datetime' = x509_cert.not_valid_after
+                not_valid_before: 'datetime' = x509_cert.not_valid_before
+                signature: bytes = x509_cert.signature
+                signature_algorithm_oid: ObjectIdentifier = x509_cert.signature_algorithm_oid
+                signature_hash_algorithm: Union['SHA256', Any] = x509_cert.signature_hash_algorithm
+                issuer: Name = x509_cert.issuer
+                subject: Name = x509_cert.subject
+                extensions: Extensions = x509_cert.extensions
+                tbs_certificate_bytes: bytes = x509_cert.tbs_certificate_bytes
+                version: Version = x509_cert.version
+
                 raise NotImplementedError(f"{self.state}: Server certificate verification is not supported")
 
-        # Signal that server certificate is okay
-        self.certificate_verified()
+            # Signal that server certificate is okay
+            self.certificate_verified()
 
     def rx_server_key_exchange(self, key_exchange: TLSServerKeyExchange):
-            # Save security parameters from the hello
-            rx_parms = self.rx_security_parameters(active=False)
-            tx_parms = self.tx_security_parameters(active=False)
+        # Validate signature
+        # TODO: Make validation of the ServerKeyExchange optional in the future
 
-            # Validate the key with the signture
-            if rx_parms.tls_version >= TLSv1_2():
-                # If the client has offered the "signature_algorithms" extension, the signature algorithm and
-                # hash algorithm MUST be a pair listed in that extension.
-                signature_algorithm = None
-                # TLSSignatureAlgorithm.get_by_code(frame[offset], rx_parms.server_public_certificate.public_key()), data_bytes[2:]
-            else:
-                signature_algorithm = RsaPkcs1Md5Sha1(rx_parms.server_public_certificate.public_key())
+        rx_parms = self.rx_security_parameters(active=False)
+        # tx_parms = self.tx_security_parameters(active=False)
 
-            if not key_exchange.validate(tx_parms.client_random, rx_parms.server_random, signature_algorithm):
+        signature_algorithm = rx_parms.cipher_suite.signature_algorithm(rx_parms)
+
+        if self.session.verify_server_key_exchange:
+            if not signature_algorithm.verify(key_exchange.signature, key_exchange.server_params):
                 print("ServerKeyExchange: Public Key is not valid", file=sys.stderr)   # TODO: handle correctly
-                # self.close()
+                # TODO: self.close()
                 # return
+
+        # Save security parameters from the hello if needed
+        # TODO: Save stuff here
 
     def rx_server_hello_done(self, *args, eap_id: Optional[int] = 256, **kwargs):
         """
@@ -391,18 +386,31 @@ class TLSClientStateMachine(Machine):
         """
         # Construct the response.  It will most likely be larger than the minimum frame size
         # so we will need to fragment it
-
-        # Now make a list of records
-        certificate = self._client_certificate()
-        key_exchange = self._client_key_exchange()
-        verify = self._certificate_verify()
-        finish, encrypted_data = self._client_finish((certificate, verify, key_exchange))
-
         pkt_data = b""
-        for pkt in (certificate, key_exchange, verify, finish, encrypted_data):
-            record = self._session.create_tls_handshake_record(pkt)
+
+        # Now make a list of records to add to the finish
+        if self._client_certificate_requested:
+            client_certificate = self._client_certificate()
+            record = self._session.create_tls_handshake_record(client_certificate)
             pkt_data += bytes(record)
-            print(f"Record: {record}, Data: {pkt_data} ")
+            print(f"Record: {record}, Data Len: {len(pkt_data)} bytes")
+
+        key_exchange = self._client_key_exchange()
+        record = self._session.create_tls_handshake_record(key_exchange)
+        pkt_data += bytes(record)
+        print(f"Record: {record}, Data Len: {len(pkt_data)} bytes")
+
+        verify = self._certificate_verify(pkt_data)
+        record = self._session.create_tls_handshake_record(verify)
+        pkt_data += bytes(record)
+        print(f"Record: {record}, Data Len: {len(pkt_data)} bytes")
+
+        change_cipher_spec = TLSChangeCipherSpecRecord(TLSChangeCipherSpecType.CHANGE_CIPHER_SPEC)
+        pkt_data += bytes(change_cipher_spec)
+        print(f"Record: {change_cipher_spec}, Data Len: {len(pkt_data)} bytes")
+
+        finish = self._client_finish(pkt_data)
+        pkt_data += bytes(finish)
 
         # TODO: Need to fragment this and send it.  Can we add that into the session send?
         # And all this goes over EAPOL/EAP_TLS
@@ -411,10 +419,12 @@ class TLSClientStateMachine(Machine):
     def _client_certificate(self) -> 'TLSCertificate':
         from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert, ASN_1_CertList
 
+        # TODO: Allow more than a single client and ca_certificate.  Also, if no certificates, send empty record
+        #       per RFC.
         certificate = self.session.certificate.tbs_certificate_bytes if self.session.certificate is not None else b''
         ca_certificate = self.session.ca_certificate.tbs_certificate_bytes if self.session.ca_certificate is not None else b''
         pub_cert = ASN_1_Cert(certificate)
-        ca_cert = ASN_1_Cert(ca_certificate)  # TODO: Need to support a list?
+        ca_cert = ASN_1_Cert(ca_certificate)
         cert_list = ASN_1_CertList([pub_cert, ca_cert])
 
         return TLSCertificate(cert_list, length=cert_list.length)
@@ -425,23 +435,35 @@ class TLSClientStateMachine(Machine):
         #
         # If RSA is used as a key exchange method, then the client selects a set of keys,
         # encrypts tme, and sends them on.  If DH was usd as a key exchange method, both sides
-        # would agree on Z and that would be used as the key. However TLS needs more.
+        # would agree on Z and that would be used as the key. However, TLS needs more.
         #
-        #
-        #
-        #
-        server_certificate= next((record.get_layer("TLSCertificate") for record in self.session.received_handshake_records
-                                  if record.has_layer("TLSCertificate")), None)
+        rx_parms = self.rx_security_parameters(active=False)
+        tx_parms = self.tx_security_parameters(active=False)
+
+        # pre_master_secr
+
+        server_certificate = rx_parms.server_certificate
+
+        # TODO: What do we need from server_key_exchange.  Save to Rx_parms
         server_key_exchange = next((record.get_layer("TLSServerKeyExchange") for record in self.session.received_handshake_records
                                     if record.has_layer("TLSServerKeyExchange")), None)
 
         return TLSClientKeyExchange.create(self.session)
 
-        public_key = self._session.public_key
-        private_key = self._session.private_key
-        self._session.keyh
-        self.public_key = keys.get("public")
-        self.private_key = keys.get("private")
+        server_certificate = security_params.server_certificate
+        server_public_key = security_params.server_public_key
+
+        client_public_key = security_params.client_public_key
+        client_private_key = security_params.client_private_key
+
+        key_exchange_type = security_params.cipher_suite.key_exchange_type
+        signature = b""
+
+        # public_key = self._session.public_key
+        # private_key = self._session.private_key
+        # self._session.keyh
+        # self.public_key = keys.get("public")
+        # self.private_key = keys.get("private")
 
         # certificate = self.session.certificate.tbs_certificate_bytes if self.session.certificate is not None else b''
         # ca_certificate = self.session.ca_certificate.tbs_certificate_bytes if self.session.ca_certificate is not None else b''
@@ -450,75 +472,25 @@ class TLSClientStateMachine(Machine):
         # cert_list = ASN_1_CertList([pub_cert, ca_cert])
         return TLSClientKeyExchange()
 
-        #
-        # class _UnEncryptedPreMasterSecret(Raw):
-        #     """
-        #     When the content of an EncryptedPreMasterSecret could not be deciphered,
-        #     we use this class to represent the encrypted data.
-        #     """
-        #     name = "RSA Encrypted PreMaster Secret (protected)"
-        #
-        #     def __init__(self, *args, **kargs):
-        #         kargs.pop('tls_session', None)
-        #         return super(_UnEncryptedPreMasterSecret, self).__init__(*args, **kargs)  # noqa: E501
-
-        # class EncryptedPreMasterSecret(_GenericTLSSessionInheritance):
-        #     """
-        #     Pay attention to implementation notes in section 7.4.7.1 of RFC 5246.
-        #     """
-        #     name = "RSA Encrypted PreMaster Secret"
-        #     fields_desc = [_TLSClientVersionField("client_version", None,
-        #                                           _tls_version),
-        #                    StrFixedLenField("random", None, 46)]
-        # @classmethod
-        # def dispatch_hook(cls, _pkt=None, *args, **kargs):
-        #     if 'tls_session' in kargs:
-        #         s = kargs['tls_session']
-        #         if s.server_tmp_rsa_key is None and s.server_rsa_key is None:
-        #             return _UnEncryptedPreMasterSecret
-        #     return EncryptedPreMasterSecret
-        #
-        # def post_build(self, pkt, pay):
-        #     """
-        #     We encrypt the premaster secret (the 48 bytes) with either the server
-        #     certificate or the temporary RSA key provided in a server key exchange
-        #     message. After that step, we add the 2 bytes to provide the length, as
-        #     described in implementation notes at the end of section 7.4.7.1.
-        #     """
-        #     enc = pkt
-        #
-        #     s = self.tls_session
-        #     s.pre_master_secret = enc
-        #     s.compute_ms_and_derive_keys()
-        #
-        #     if s.server_tmp_rsa_key is not None:
-        #         enc = s.server_tmp_rsa_key.encrypt(pkt, t="pkcs")
-        #     elif s.server_certs is not None and len(s.server_certs) > 0:
-        #         enc = s.server_certs[0].encrypt(pkt, t="pkcs")
-        #     else:
-        #         warning("No material to encrypt Pre Master Secret")
-        #
-        #     tmp_len = b""
-        #     if s.tls_version >= 0x0301:
-        #         tmp_len = struct.pack("!H", len(enc))
-        #     return tmp_len + enc + pay
-
-        # For RSA, Clinege generates a random string of bytes called a pre-master
-        # secret, then encrypt it with the servers public key.
-
-        #     Pay attention to implementation notes in section 7.4.7.1 of RFC 5246.
-
-
-    def _certificate_verify(self) -> 'TLSCertificateVerify':
+    def _certificate_verify(self, new_client_records: bytes) -> 'TLSCertificateVerify':
         from tls_packet.auth.tls_certificate_verify import TLSCertificateVerify
-        # certificate = self.session.certificate.tbs_certificate_bytes if self.session.certificate is not None else b''
-        # ca_certificate = self.session.ca_certificate.tbs_certificate_bytes if self.session.ca_certificate is not None else b''
-        # pub_cert = ASN_1_Cert(certificate)
-        # ca_cert = ASN_1_Cert(ca_certificate)  # TODO: Need to support a list?
-        # cert_list = ASN_1_CertList([pub_cert, ca_cert])
-        return TLSCertificateVerify()
 
-    def _client_finish(self, additional_handshakes: List['TLSHandshake']) -> Tuple['TLSFinish', bytes]:
+        # TODO: Eventually do hash on packet send so we do not have to re-pack
+
+        data_so_far = "".join(record.pack() for record in self.session._client_handshake_records_sent)
+        data_so_far += "".join(record.pack() for record in self.session._server_handshake_records_received)
+        data_so_far += new_client_records
+
+        rx_parms = self.rx_security_parameters(active=False)
+
+        return TLSCertificateVerify.create(data_so_far, rx_parms)
+
+    def _client_finish(self, new_client_records: bytes) -> 'TLSFinish':
+        # TODO: Eventually do hash on packet send so we do not have to re-pack
+        data_so_far = "".join(record.pack() for record in self.session._client_handshake_records_sent)
+        data_so_far += "".join(record.pack() for record in self.session._server_handshake_records_received)
+        data_so_far += new_client_records
+
         from tls_packet.auth.tls_finish import TLSFinish
         finish = TLSFinish()
 
@@ -531,7 +503,7 @@ class TLSClientStateMachine(Machine):
         # pub_cert = ASN_1_Cert(certificate)
         # ca_cert = ASN_1_Cert(ca_certificate)  # TODO: Need to support a list?
         # cert_list = ASN_1_CertList([pub_cert, ca_cert])
-        return finish, b""
+        return finish
 
     def on_enter_wait_finished(self, *args, **kwargs):
         """

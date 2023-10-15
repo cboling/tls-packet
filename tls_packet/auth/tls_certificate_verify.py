@@ -77,6 +77,27 @@ class TLSCertificateVerify(TLSHandshake):
         return self._signature
 
     @staticmethod
+    def create(data_so_far: bytes, security_params: 'SecurityParamters') -> bytes:
+        signature = b""
+
+        server_certificate = security_params.server_certificate
+        server_public_key = security_params.server_public_key
+
+        client_public_key = security_params.client_public_key
+        client_private_key = security_params.client_private_key
+
+        key_exchange_type = security_params.cipher_suite.key_exchange_type
+        signature = b""
+
+        TLSCertificateVerify(signature)
+
+        # certificate = self.session.certificate.tbs_certificate_bytes if self.session.certificate is not None else b''
+        # ca_certificate = self.session.ca_certificate.tbs_certificate_bytes if self.session.ca_certificate is not None else b''
+        # pub_cert = ASN_1_Cert(certificate)
+        # ca_cert = ASN_1_Cert(ca_certificate)  # TODO: Need to support a list?
+        # cert_list = ASN_1_CertList([pub_cert, ca_cert])
+
+    @staticmethod
     def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSCertificateRequest """
 
