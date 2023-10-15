@@ -16,14 +16,14 @@
 # pylint: skip-file
 
 import unittest
-from mocks.mock_packet import FIXED_RANDOM
 from mocks.util import assertGeneratedFrameEquals
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls import TLSv1
+from tls_packet.auth.tls_certificate import ASN_1_Cert
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
-from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurve, NamedCurveType
+from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurveType
 from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordContentType
 from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange, TLSServerKeyExchangeECDH
 
@@ -34,7 +34,6 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
         cipher_suite = CipherSuite.get_from_id(TLSv1(), 0xC014)
         cls.curve_type = ECCurveType.NAMED_CURVE
         cls.named_curve_type = NamedCurveType.SECP256R1
-        cls.server_certificate = "0003de308203da308202c2a003020102020101300d06092a864886f70d01010b0500308193310b3009060355040613024652310f300d06035504080c065261646975733112301006035504070c09536f6d65776865726531153013060355040a0c0c4578616d706c6520496e632e3120301e06092a864886f70d010901161161646d696e406578616d706c652e6f72673126302406035504030c1d4578616d706c6520436572746966696361746520417574686f72697479301e170d3232313130333134323730375a170d3339303430383134323730375a307c310b3009060355040613024652310f300d06035504080c0652616469757331153013060355040a0c0c4578616d706c6520496e632e3123302106035504030c1a4578616d706c65205365727665722043657274696669636174653120301e06092a864886f70d010901161161646d696e406578616d706c652e6f726730820122300d06092a864886f70d01010105000382010f003082010a0282010100d9a320bb37e6c9abd67159680b86f036a108a3eb5b91165731794bb4fdd2f4869b67e530cf5dbaf8289fa1e20fc81a87a58138880253379284738ec5584b4ecfa97178141a22eddf76ea7385e08d1f186a550b9db767354cd3fd38d9879469bc02dc28fa83515453b51f60f2232319bf081d115d661f3794f33bf0bab1df292c9808e8f1c59010b8a6a15617c5952304ea85fb66c1936e3e9059ac5fd67fbe7d638c1e5b7ba57f716189607ea6d6ccfe0fda33e15905bf46e4f4100d56a40f7ca532e42e8d4da450cc190fbb874013b4093f446aba990ff005228bd1973af93b0f08ea0ca638c9574f1a73bf5b89bf4c8ac0745b3c07bef2a5e9f82d47c281dd0203010001a34f304d30130603551d25040c300a06082b0601050507030130360603551d1f042f302d302ba029a0278625687474703a2f2f7777772e6578616d706c652e636f6d2f6578616d706c655f63612e63726c300d06092a864886f70d01010b05000382010100291f97deb51c0afa81fd42f9de3c45ea2947d80c2ae73860cd74596f8324f94484bbd3f99dae8a6139af67d8df24a9d099642720e77afabfb5c271013b57dc64266ee11e89286942bf95f7c80c043a3424468790fb92a932fe773e5627f5f12799cfe9ee16b7946ca47384ed2e12afb001e3d0dee7e694810177de9c507a3db9b2835891a5afac3381fe64e054e717f23421996d9888233cc6598474bac98eda31bde594641f60ff332dc48cb351188313cfc1905a68347e28e8cf294817ab764a4f4a6deb02bab584ea298e7a444d7f3b35e2084f82c944f5d1a597709362e7cb5e6da8e57f2acc14cfad512f1f916381268928448047c47b945431232b262c"
         cls.client_random = "13f856553bbe73787b0acf60bf2a644812804a4fd62328e94984b35299cad491"
         cls.server_random = "391c112416c4dee2aa08c579eb4803f77d9ecfdcb7fe7eb9bf0e9327640d11ca"
         cls.pubkey = "04ceea15247ac22f63d9393d1a160fe67e1962d173a2b75f7fc393fc721467b264d47c1a1915c4f2d29c8d2152b511bfafceb6dddb7ccf9967be094533c1731275"
@@ -42,9 +41,15 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
                          "6e84b730967897d5f12a3fe152dd06c5569cdb624f0ef3f4a8100e0aa3ebdce6c5395d5823a0b39ba066e5c462e6bc442d01b1c5840943ec0023aedcecde827" +
                          "7651b29beed36ec06495602ce03d68b100ca80217aebe1eae38a6054209980053c50196e5d25cab3f3a53a0ac2738042ea5ed966e00a68da5a3f7300faf39f8" +
                          "9f949df19648220a81eef1e6bb05a588e8138145b4ee84436b534fd011dad694680d7344af86e9a5ca4ad54839487fb09c8a780be055578f79e6f4d73a4aa05939a")
+
+        server_certificate = "0003de308203da308202c2a003020102020101300d06092a864886f70d01010b0500308193310b3009060355040613024652310f300d06035504080c065261646975733112301006035504070c09536f6d65776865726531153013060355040a0c0c4578616d706c6520496e632e3120301e06092a864886f70d010901161161646d696e406578616d706c652e6f72673126302406035504030c1d4578616d706c6520436572746966696361746520417574686f72697479301e170d3232313130333134323730375a170d3339303430383134323730375a307c310b3009060355040613024652310f300d06035504080c0652616469757331153013060355040a0c0c4578616d706c6520496e632e3123302106035504030c1a4578616d706c65205365727665722043657274696669636174653120301e06092a864886f70d010901161161646d696e406578616d706c652e6f726730820122300d06092a864886f70d01010105000382010f003082010a0282010100d9a320bb37e6c9abd67159680b86f036a108a3eb5b91165731794bb4fdd2f4869b67e530cf5dbaf8289fa1e20fc81a87a58138880253379284738ec5584b4ecfa97178141a22eddf76ea7385e08d1f186a550b9db767354cd3fd38d9879469bc02dc28fa83515453b51f60f2232319bf081d115d661f3794f33bf0bab1df292c9808e8f1c59010b8a6a15617c5952304ea85fb66c1936e3e9059ac5fd67fbe7d638c1e5b7ba57f716189607ea6d6ccfe0fda33e15905bf46e4f4100d56a40f7ca532e42e8d4da450cc190fbb874013b4093f446aba990ff005228bd1973af93b0f08ea0ca638c9574f1a73bf5b89bf4c8ac0745b3c07bef2a5e9f82d47c281dd0203010001a34f304d30130603551d25040c300a06082b0601050507030130360603551d1f042f302d302ba029a0278625687474703a2f2f7777772e6578616d706c652e636f6d2f6578616d706c655f63612e63726c300d06092a864886f70d01010b05000382010100291f97deb51c0afa81fd42f9de3c45ea2947d80c2ae73860cd74596f8324f94484bbd3f99dae8a6139af67d8df24a9d099642720e77afabfb5c271013b57dc64266ee11e89286942bf95f7c80c043a3424468790fb92a932fe773e5627f5f12799cfe9ee16b7946ca47384ed2e12afb001e3d0dee7e694810177de9c507a3db9b2835891a5afac3381fe64e054e717f23421996d9888233cc6598474bac98eda31bde594641f60ff332dc48cb351188313cfc1905a68347e28e8cf294817ab764a4f4a6deb02bab584ea298e7a444d7f3b35e2084f82c944f5d1a597709362e7cb5e6da8e57f2acc14cfad512f1f916381268928448047c47b945431232b262c"
+        asn_cert = ASN_1_Cert.parse(bytes.fromhex(server_certificate))
+        server_cert = asn_cert.x509_certificate
+
         cls.security_params = SecurityParameters(tls_version=TLSv1(), cipher_suite=cipher_suite,
                                                  client_random=bytes.fromhex(cls.client_random),
-                                                 server_random=bytes.fromhex(cls.server_random))
+                                                 server_random=bytes.fromhex(cls.server_random),
+                                                 server_certificate=server_cert)
 
     def test_ECCurveType(self):
         # Change underscores to spaces
@@ -149,34 +154,11 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
         self.assertEqual(skey.key.hex(), self.pubkey)
         self.assertEqual(skey.signature.hex(), self.signature)
 
-        from tls_packet.auth.tls_signature_algorithm import RsaPkcs1Md5Sha1, RsaPkcs1Sha1, RsaPkcs1Sha256, RsaPssRsaeSha256, RsaPssRsaeSha384, \
-            EcdsaSecp256r1Sha256, EcdsaSecp384r1Sha384
-        from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert
+        algorithm = self.security_params.cipher_suite.signature_algorithm(self.security_params)
+        valid = algorithm.verify(skey.signature, skey.server_params)
 
-        asn_cert = ASN_1_Cert.parse(bytes.fromhex(self.server_certificate))
-        server_cert = asn_cert.x509_certificate
+        self.assertTrue(valid)
 
-        # valid = False
-        for public_key in (server_cert.public_key(),):
-            #            for algorithm in (RsaPkcs1Md5Sha1(public_key), RsaPkcs1Sha1(public_key), RsaPkcs1Sha256(public_key), RsaPssRsaeSha256(public_key), RsaPssRsaeSha384(public_key), EcdsaSecp256r1Sha256(public_key), EcdsaSecp384r1Sha384(public_key)):
-            for algorithm in (RsaPkcs1Md5Sha1(public_key),):
-                for content in (skey.server_params,):
-                    for signature in (skey.signature, bytes.fromhex(self.signature)):
-                        valid = algorithm.verify(signature, content)
-                        if valid:
-                            break
-
-        # self.assertTrue(valid)
-
-        # if self.tls_version >= TLSv1_2():
-        #      signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
-        #                            frame[offset], self.server_cert.public_key()), data_bytes[2:]
-        # else:
-        #     signature_algorithm = signature_algorithms.RsaPkcs1Md5Sha1(self.server_certificate.public_key())
-        # return signature_algorithm
-        # self.assertTrue(skey.validate(self.security_params.client_random,
-        #                               self.security_params.server_random,
-        #                               self.security_params.cipher_suite.signature_algorithm))
 
 if __name__ == '__main__':
     unittest.main()

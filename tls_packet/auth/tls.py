@@ -18,7 +18,134 @@ from typing import Union
 
 
 class TLS:
-    """ TLS base class """
+    """
+    TLS base class
+
+                     The Transport Layer Security (TLS) Protocol
+                                 Version 1.0 -> 1.2
+
+         Handshake Protocol
+
+              Client                                               Server
+
+              ClientHello                  -------->
+                                                              ServerHello
+                                                             Certificate*
+                                                       ServerKeyExchange*
+                                                      CertificateRequest*
+                                           <--------      ServerHelloDone
+              Certificate*
+              ClientKeyExchange
+              CertificateVerify*
+              [ChangeCipherSpec]
+              Finished                     -------->
+                                                       [ChangeCipherSpec]
+                                           <--------             Finished
+              Application Data             <------->     Application Data
+
+            * Indicates optional or situation-dependent messages that are not
+              always sent.
+
+            The TLS Handshake Protocol is one of the defined higher-level clients
+            of the TLS Record Protocol.  This protocol is used to negotiate the
+            secure attributes of a session.  Handshake messages are supplied to
+            the TLS record layer, where they are encapsulated within one or more
+            TLSPlaintext structures, which are processed and transmitted as
+            specified by the current active session state.
+
+            TLS 1.0 - Released in 1999 and published as RFC 2246. This version of TLS was
+                      very similar to SSL 3.0
+
+            TLS 1.1 - Released in 2006 and published as RFC 4346.
+
+                      According to RFC 4346, the major differences that exist in TLS 1.1
+                      compared to TLS 1.0 include the following:
+
+                        o The implicit Initialization Vector (IV) is replaced with an explicit
+
+                        o Initialization Vector for protection against Cipher Block Chaining
+                          (CBC) attacks.
+
+                        o Padding error handling is modified to use bad_record_mac alert
+                          rather than decryption_failed alert. Again, to protect against CBC
+                          attacks.
+
+                        o IANA registries are defined for protocol parameters.
+
+                        o A premature close no longer causes a session to be non-resumable.
+
+                        o Additional notes were added regarding new attacks and a number of
+                          clarifications and editorial improvements were made.
+
+            TLS 1.2 - Released in 2008 and published as RFC 5246.
+
+                      TLS 1.2 is currently the most used version of TLS and has made several
+                      improvements in security compared to TLS 1.1. According to RFC 4346, the
+                      major differences that exist in TLS 1.2 when compared to TLS 1.1 include
+                      the following:
+
+                        o The MD5/SHA-1 combination in the pseudorandom function (PRF) is replaced
+                          with SHA-256 with the option to use the cipher-suite-specified PRFs.
+
+                        o The MD5/SHA-1 combination in the digitally-signed element is replaced
+                          with a single hash which is negotiated during the handshake.
+
+                        o Improvements to the client's and server's ability to specify the
+                          accepted hash and signature algorithms.
+
+                        o Support for authenticated encryption for other data modes
+
+                        o TLS extensions and AES cipher suites were added
+
+                        o Tightened up various requirements
+
+                      The greater enhancement in encryption of TLS 1.2 allows it to use more secure
+                      hash algorithms such as SHA-256 as well as advanced cipher suites that support
+                      elliptical curve cryptography.
+
+            TLS 1.3 - Released in August 2018 and published as RFC 8446
+
+                      TLS 1.3 offers several improvements over earlier versions, most notably a
+                      faster TLS handshake and simpler, more secure cipher suites. Zero Round-Trip
+                      Time (0-RTT) key exchanges further streamline the TLS handshake. Together,
+                      these changes provide better performance and stronger security.
+
+
+                            The Transport Layer Security (TLS) Protocol
+                                          Version 1.3
+
+                             Client                               Server
+
+                      Initial Handshake:
+                          ClientHello
+                          + key_share           -------->
+                                                                    ServerHello
+                                                                    + key_share
+                                                          {EncryptedExtensions}
+                                                          {CertificateRequest*}
+                                                                 {Certificate*}
+                                                           {CertificateVerify*}
+                                                                     {Finished}
+                                               <--------    [Application Data*]
+                          {Certificate*}
+                          {CertificateVerify*}
+                          {Finished}           -------->
+                                               <--------     [NewSessionTicket]
+                          [Application Data]   <------->     [Application Data]
+
+                      Subsequent Handshake:
+                         ClientHello
+                         + key_share*
+                         + pre_shared_key      -------->
+                                                                    ServerHello
+                                                               + pre_shared_key
+                                                                   + key_share*
+                                                          {EncryptedExtensions}
+                                                                     {Finished}
+                                               <--------    [Application Data*]
+                         {Finished}            -------->
+                         [Application Data]    <------->     [Application Data]
+    """
     _code = tuple()
 
     @classmethod

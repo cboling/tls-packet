@@ -32,7 +32,41 @@ logger = logging.getLogger(__name__)
 
 
 class TLSClient:
-    """ TLS Client """
+    """
+     TLS Client
+                     The Transport Layer Security (TLS) Protocol
+                                 Version 1.0 -> 1.2
+
+         Handshake Protocol
+
+              Client                                               Server
+
+              ClientHello                  -------->
+                                                              ServerHello
+                                                             Certificate*
+                                                       ServerKeyExchange*
+                                                      CertificateRequest*
+                                           <--------      ServerHelloDone
+              Certificate*
+              ClientKeyExchange
+              CertificateVerify*
+              [ChangeCipherSpec]
+              Finished                     -------->
+                                                       [ChangeCipherSpec]
+                                           <--------             Finished
+              Application Data             <------->     Application Data
+
+            * Indicates optional or situation-dependent messages that are not
+              always sent.
+
+            The TLS Handshake Protocol is one of the defined higher-level clients
+            of the TLS Record Protocol.  This protocol is used to negotiate the
+            secure attributes of a session.  Handshake messages are supplied to
+            the TLS record layer, where they are encapsulated within one or more
+            TLSPlaintext structures, which are processed and transmitted as
+            specified by the current active session state.
+      """
+    _supported_tls_versions = (TLSv1(), TLSv1_2())  # TODO: TLSv1_1(), TLSv1_2())
 
     def __init__(self, auth_socket,
                  tls_version: Optional[TLS] = None,
@@ -47,7 +81,6 @@ class TLSClient:
         self.auth_socket = auth_socket
 
         self._tls_version = tls_version or TLSv1_2()
-        self._supported_tls_versions = (TLSv1(), TLSv1_2())
 
         # TODO: See what we can get rid of...
         # TODO: Move read-only attributes to protected names and provide @property access
@@ -67,8 +100,15 @@ class TLSClient:
         self.session_id = session_id
         # TODO: PSK not yet supported
         excluded = (TLSKeyExchangeTypes.RSA_PSK, TLSKeyExchangeTypes.DHE_PSK, TLSKeyExchangeTypes.ECDHE_PSK)
+
+        # TODO: Base the initial ciphers on the versions available and select that version and earlier based
+        #       on initial TLS version requested by client. Server is responsible for selecting other support
         self.ciphers = ciphers or CipherSuite.get_cipher_suites_by_version(self.tls_version, excluded=excluded)
         self.extensions = extensions
+
+        # TODO: Support declaring Named Curve support based on inititial TLS version the client is requesting.
+        #       That means if requestion v1.0, use all 25, but if later versions, support the deprecation of
+        #       some of them.
 
         # Following are decode from server messages.  Any better place for them
         self.server_certificates = None
@@ -104,16 +144,16 @@ class TLSClient:
         }
 
         print("*** Not enforcing client EAP-TLS fragmentation yet")
-        self.eap_tls_client_data_max_len = 16000
+        self.eap_tls_client_data_max_len = 16000  # TODO: Make this get set propertly in EAP area
 
         self._debug = debug
+        self.state_machine: TLSClientStateMachine = TLSClientStateMachine(self)
 
         # Probably want these - TODO Eventually calculate the hash on the fly if possible
         self._client_handshake_records_sent: List['TLSRecord'] = []
         self._server_handshake_records_received: List['TLSRecord'] = []
 
-        # From earlier work     TODO: Remove old code
-
+        # From earlier work     TODO: Remove old code later
         self.eap_tls_server_data = b''
         self.eap_tls_expected_len = 0
         self.eap_tls_last_id = 256
@@ -123,9 +163,6 @@ class TLSClient:
 
         self._eap_tls_last_sent_id = 256
         self._eap_tls_last_sent_data = None
-
-        # TODO: Deprecate much above and move to this
-        self.state_machine: TLSClientStateMachine = TLSClientStateMachine(self)
 
     def rx_security_parameters(self, active: Optional[bool] = True) -> SecurityParameters:
         return self._security_parameters["active_rx" if active else "pending_rx"]
