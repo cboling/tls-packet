@@ -16,14 +16,12 @@
 
 import struct
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import dh, ec, x25519, x448
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
-from enum import IntEnum
+from cryptography.hazmat.primitives.asymmetric import ec, x25519, x448
 from typing import Union, Optional
 
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.security_params import TLSKeyExchangeTypes
-from tls_packet.auth.tls import TLS, TLSv1_2
+from tls_packet.auth.tls import TLS
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.auth.tls_named_curve import get_named_curve_by_type, ECCurveType, NamedCurveType, NamedCurve
 from tls_packet.packet import DecodeError, PARSE_ALL
@@ -107,12 +105,18 @@ class TLSServerKeyExchange(TLSHandshake):
             raise DecodeError(f"TLSServerKeyExchange: Key Exchange message truncated: Expected at least {msg_len} bytes, got: {frame_len - offset}")
 
         if key_exchange_type == TLSKeyExchangeTypes.RSA:
+            # TODO: This has not been tested...
             return TLSServerKeyExchangeRSA.parse(frame[4:], **kwargs)
 
         elif key_exchange_type == TLSKeyExchangeTypes.DHE:
             return TLSServerKeyExchangeDH.parse(frame[4:], **kwargs)
 
-        elif key_exchange_type == TLSKeyExchangeTypes.ECDHE:
+        elif key_exchange_type in (TLSKeyExchangeTypes.ECDHE, TLSKeyExchangeTypes.ECDHE_ECDSA, TLSKeyExchangeTypes.ECDHE_RSA):
+            # TODO: If the ECDHE_RSA key exchange is specified in the server hello, then there will most likely not be
+            #       a Server Key Exchange handshake record and this will never be reached.  Verify this and if a server
+            #       exchange key is ever sent, the parser below may not be the right one.
+            #
+            # TODO: Have not tested this with TLSKeyExchangeTypes.ECDHE_ECDSA. See ECDHE_RSA TODO above as well.
             return TLSServerKeyExchangeECDH.parse(frame[4:], **kwargs)
 
         else:
@@ -231,7 +235,7 @@ class TLSServerKeyExchangeECDH(TLSServerKeyExchange):
 
         self._curve_type = curve_type
         self._named_curve_type = named_curve_type
-        # TODO: Is the next needec?
+        # TODO: Is the next needed?
         self._server_key_exchange_public_key = TLSServerKeyExchangeECDH.named_groups_import(named_curve_type, public_key)
         print(f" exPk        : {self._server_key_exchange_public_key}")
 
@@ -358,13 +362,12 @@ class TLSServerKeyExchangeDH(TLSServerKeyExchange):
 
     """
 
-    def __init__(self, dh_p: bytes, dh_g: int, dh_ys: bytes, hash_algo: int, signature: bytes, server_params: bytes, **kwargs):
+    def __init__(self, dh_p: bytes, dh_g: int, dh_ys: bytes, signature: bytes, server_params: bytes, **kwargs):
         super().__init__(signature, server_params, **kwargs)
         self._dh_p = dh_p
         self._dh_g = dh_g
         self._dh_ys = dh_ys
-        self._hash = hash_algo
-        raise NotImplemetedError("TODO: Has not been tested yet")
+        raise NotImplementedError("TODO: Has not been tested yet")
 
     @property
     def dh_p(self) -> bytes:
@@ -377,10 +380,6 @@ class TLSServerKeyExchangeDH(TLSServerKeyExchange):
     @property
     def dh_ys(self) -> bytes:
         return self._dh_ys
-
-    @property
-    def hash_algorithm(self) -> int:
-        return self._hash  # TODO: need enumeration/class and not INT here
 
     @staticmethod
     def parse(frame: bytes, tls_version: Optional[TLS] = None,
@@ -422,11 +421,12 @@ class TLSServerKeyExchangeDH(TLSServerKeyExchange):
         print(f"  dh_p      : ({dh_p_length}): {dh_p.hex()}")
         print(f"  dh_g      : {dh_g.hex()}")
         print(f"  dh_Ys     : ({dh_ys_len}): {dh_ys.hex()}")
-        print(f"  Hash      : {hash_algo}/{hash_algo:#04x}")
+        # print(f"  Hash      : {hash_algo}/{hash_algo:#04x}")
         print(f"  Signature : ({sig_len}): {signature.hex()}")
         print()
         server_params = b""
-        return TLSServerKeyExchangeDH(dh_p, dh_g, dh_ys, hash_algo, signature, server_params, **kwargs)
+        return TLSServerKeyExchangeDH(dh_p, dh_g, dh_ys, signature, server_params, **kwargs)
+        # return TLSServerKeyExchangeDH(dh_p, dh_g, dh_ys, hash_algo, signature, server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
@@ -500,17 +500,18 @@ class TLSServerKeyExchangeRSA(TLSServerKeyExchange):
            } ServerKeyExchange;
 
     """
-    def __init__(self, signature: bytes, server_params: bytes, **kwargs):
-        super().__init__(signature, server_params, **kwargs)
-        raise NotImplemetedError("TODO: Has not been tested yet")
+
+    def __init__(self, signature: bytes, key: bytes, server_params: bytes, **kwargs):
+        super().__init__(signature, key, server_params, **kwargs)
+        raise NotImplementedError("TODO: Has not been tested yet")
 
     @staticmethod
-    def parse(frame: bytes, tls_version: Optional[TLS] = None,
-              max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
+    def parse(frame: bytes, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to TLSServerKeyExchange """
         signature = b""
+        key = b""
         server_params = b""
-        return TLSServerKeyExchangeRSA(signature, server_params, **kwargs)
+        return TLSServerKeyExchangeRSA(signature, key, server_params, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

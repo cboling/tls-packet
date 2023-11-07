@@ -2,21 +2,21 @@
 
 import math
 from copy import deepcopy
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.hashes import Hash, MD5, SHA1, SHA256, SHA384, SHA512, HashAlgorithm
 from typing import Optional, Iterable, Union, Type, Dict, Any
 
 from tls_packet.auth.encryption_algorithms import AES, AESGCM
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.security_params import TLSKeyExchangeTypes, TLSAuthentication
 from tls_packet.auth.tls import TLS, TLSv1, TLSv1_1, TLSv1_2, TLSv1_3
-from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm, RsaPkcs1Md5Sha1
-
-# import constants
-# import encryption_algorithms
-# import key_exchange
-# import signature_algorithms
-# from prf import prf as _prf
+from tls_packet.auth.tls_prf import prf as _prf
+from tls_packet.auth.tls_signature_algorithm import TLSMACAlgorithm, RsaPkcs1Md5Sha1, MD5SHA1
 
 CipherSuiteDict = Type[Dict[int, Dict[str, Any]]]
+
+LABEL_CLIENT_FINISHED = b'client finished'
+LABEL_SERVER_FINISHED = b'server finished'
 
 """
 Obtainable from openssl ciphers -V
@@ -26,6 +26,16 @@ MINIMAL_SUITES = True
 if MINIMAL_SUITES:
     # TODO, Comment out the last one to test a Failure mesage due to no shared cipher
     CIPHER_SUITES = {
+        0x002F: {
+            'tls_name':                    'TLS_RSA_WITH_AES_128_CBC_SHA',
+            'openssl_name':                'AES128-SHA',
+            'version':                     TLSv1,  # Listed by openssl as SSLv3
+            'key_exchange':                TLSKeyExchangeTypes.RSA,
+            'authentication':              TLSAuthentication.RSA,
+            'encryption_algorithm':        AES,
+            'key_material_bits':           128,
+            'message_authentication_code': TLSMACAlgorithm.HMAC_SHA1
+        },
         0x003C: {
             'tls_name':                    'TLS_RSA_WITH_AES_128_CBC_SHA256',
             'openssl_name':                'AES128-SHA256',
@@ -137,16 +147,6 @@ else:
         'key_exchange': 'DH',
         'authentication': 'RSA',
         'encryption_algorithm': '3DES(168)',
-        'message_authentication_code': 'SHA1'
-    },
-    'AES128-SHA': {
-        'id': '0x002F',
-        'tls_name': 'TLS_RSA_WITH_AES_128_CBC_SHA',
-        'openssl_name': 'AES128-SHA',
-        'version': 'SSLv3',
-        'key_exchange': 'RSA',
-        'authentication': 'RSA',
-        'encryption_algorithm': 'AES(128)',
         'message_authentication_code': 'SHA1'
     },
     'DH-DSS-AES128-SHA': {
@@ -1076,30 +1076,6 @@ def int_to_bytes(data: int, length):
     return data.to_bytes(length, 'big')
 
 
-def prf_legacy(secret, label, seed, output_length):
-    l_s = len(secret)
-    l_s1 = l_s2 = math.ceil(l_s / 2)
-    s1 = secret[:l_s1]
-    s2 = secret[l_s1:]
-    # assert l_s1 == l_s2, 'Odd length, inspect this case'
-
-    _md5 = _prf(s1, label, seed, signature_algorithms.MD5(), output_length)
-    _sha1 = _prf(s2, label, seed, signature_algorithms.SHA1(), output_length)
-
-    _md5int = int.from_bytes(_md5, 'big')
-    _sha1int = int.from_bytes(_sha1, 'big')
-    xor = _md5int ^ _sha1int
-    return xor.to_bytes(output_length, 'big')
-
-
-def prf(tls_version: TLS, algorithm, secret, label, seed, output_length):
-    if tls_version >= TLSv1_2():
-        algorithm = algorithm if algorithm.digest_size >= 32 else signature_algorithms.SHA256()
-        return _prf(secret, label, seed, algorithm, output_length)
-    else:
-        return prf_legacy(secret, label, seed, output_length)
-
-
 class CipherSuite:
     def __init__(self, tls_version: TLS, cipher_suite: Dict[str, Any]):
         self.tls_version            = tls_version
@@ -1110,10 +1086,7 @@ class CipherSuite:
         self.key_material_bits      = cipher_suite.get("key_material_bits")
         self.message_authentication_code = cipher_suite.get("message_authentication_code")
 
-        #ke = cipher_suite['key_exchange'].split('/')
-        #args = [tls_version, client_random, server_random, server_cert, ke[1] if len(ke) > 1 else None]
-        #self._key_exchange: key_exchange.KeyExchange = getattr(key_exchange, ke[0])(*args)
-        self.keys = dict()
+        self.keys: Dict[str, Any] = {}
 
     def __str__(self):
         return self.properties['openssl_name']  # TODO: Improve this
@@ -1150,15 +1123,10 @@ class CipherSuite:
         cipher = CIPHER_SUITES.get(ident)
         return CipherSuite(tls_version, cipher) if cipher else None
 
-    @property
-    def pre_master_secret(self):
-        raise ValueError('pre_master_secret is not obtainable.')
+    def master_secret(self, pre_master_secret: bytes, security_params: SecurityParameters, tls_version: TLS) -> None:
+        self._derive_key(pre_master_secret, security_params, tls_version)
 
-    @pre_master_secret.setter
-    def pre_master_secret(self, value):
-        self._derive_key(value)
-
-    def signature_algorithm(self, security_params: SecurityParameters):
+    def signature_algorithm(self, security_params: SecurityParameters, tls_version: TLS):
         # name = self.properties.get('message_authentication_code')
         # if name == 'AEAD':
         #     openssl_name = self.properties.get('openssl_name')
@@ -1167,7 +1135,7 @@ class CipherSuite:
         # return getattr(signature_algorithms, name)()
         public_key = security_params.server_public_key
 
-        if security_params.tls_version >= TLSv1_2():
+        if tls_version >= TLSv1_2():
             raise NotImplementedError("TODO: Need to implement")
             # signature_algorithm = signature_algorithms.SignatureAlgorithm.get_by_code(
             #                        frame[offset], public_key), data_bytes[2:]
@@ -1183,24 +1151,48 @@ class CipherSuite:
         # return getattr(encryption_algorithms, text[0])()
         return self._encryption_algorithm
 
-    def prf(self, secret, label, seed, output_length):
-        return prf(self.tls_version, self.signature_algorithm, secret, label, seed, output_length)
+    def prf_legacy(self, secret, label, seed, output_length):
+        l_s = len(secret)
+        l_s1 = l_s2 = math.ceil(l_s / 2)
+        s1 = secret[:l_s1]
+        s2 = secret[l_s1:]
+        # assert l_s1 == l_s2, 'Odd length, inspect this case'
 
-    def _derive_key(self, value):
-        master_secret = self.prf(value, b'master secret', self.client_random + self.server_random, 48)
+        md5 = _prf(s1, label, seed, MD5(), output_length)
+        sha1 = _prf(s2, label, seed, SHA1(), output_length)
 
+        md5int = int.from_bytes(md5, 'big')
+        sha1int = int.from_bytes(sha1, 'big')
+        xor = md5int ^ sha1int
+        return xor.to_bytes(output_length, 'big')
+
+    def prf(self, secret: bytes, label, seed, output_length, tls_version: TLS) -> bytes:
+        if tls_version >= TLSv1_2():
+            algorithm = self.signature_algorithm if self.signature_algorithm.digest_size >= 32 else SHA256()
+            return _prf(secret, label, seed, algorithm, output_length)
+        else:
+            return self.prf_legacy(secret, label, seed, output_length)
+
+    def _derive_key(self, value: bytes, security_params: SecurityParameters, tls_version: TLS) -> None:
+        master_secret = self.prf(value, b'master secret',
+                                 security_params.client_random + security_params.server_random,
+                                 48, tls_version)
         # key_block
-        kb = self.prf(master_secret, b'key expansion', self.server_random + self.client_random, 200)
+        kb = self.prf(master_secret, b'key expansion',
+                      security_params.server_random + security_params.client_random,
+                      200, tls_version)
 
-        keys, sp = {}, self.security_parameters
-
+        keys = {}
+        hash_size = security_params.hash_size
+        key_material_length = 123  # TODO: Figure this out
+        iv_size = 456  # TODO: Figure this out
         keys['master_secret'] = master_secret
-        keys['client_write_mac_key'], kb = kb[:sp['hash_size']], kb[sp['hash_size']:]
-        keys['server_write_mac_key'], kb = kb[:sp['hash_size']], kb[sp['hash_size']:]
-        keys['client_write_key'], kb = kb[:sp['key_material_length']], kb[sp['key_material_length']:]
-        keys['server_write_key'], kb = kb[:sp['key_material_length']], kb[sp['key_material_length']:]
-        keys['client_write_iv'], kb = kb[:sp['IV_size']], kb[sp['IV_size']:]
-        keys['server_write_iv'], kb = kb[:sp['IV_size']], kb[sp['IV_size']:]
+        keys['client_write_mac_key'], kb = kb[:hash_size], kb[hash_size:]
+        keys['server_write_mac_key'], kb = kb[:hash_size], kb[hash_size:]
+        keys['client_write_key'], kb = kb[key_material_length], kb[key_material_length:]
+        keys['server_write_key'], kb = kb[key_material_length], kb[key_material_length:]
+        keys['client_write_iv'], kb = kb[iv_size, kb[iv_size]:]
+        keys['server_write_iv'], kb = kb[iv_size, kb[iv_size]:]
 
         self.keys = keys
 
@@ -1232,26 +1224,25 @@ class CipherSuite:
             'hash_algorithm': self.signature_algorithm,
             'sign_key': self.keys['{}_write_mac_key'.format(decrypt_from)]
         }
-
         return self.encryption_algorithm.decrypt(**kwargs)
 
     def sign_verify_data(self, message):
         data = self.hash_verify_data(message)
-        return self.prf(self.keys.get('master_secret'), constants.LABEL_CLIENT_FINISHED, data, 12)
+        return self.prf(self.keys.get('master_secret'), LABEL_CLIENT_FINISHED, data, 12)
 
     def verify_verify_data(self, message, signature):
         data = self.hash_verify_data(message)
-        generated = self.prf(self.keys.get('master_secret'), constants.LABEL_SERVER_FINISHED, data, 12)
+        generated = self.prf(self.keys.get('master_secret'), LABEL_SERVER_FINISHED, data, 12)
         assert signature == generated, ValueError('Signature incorrect')
 
     def hash_verify_data(self, message):
         if self.tls_version < TLSv1_2():
-            algorithm = signature_algorithms.MD5SHA1()
+            algorithm = MD5SHA1()
         else:
             algorithm = self.signature_algorithm
             if algorithm.digest_size < 32:
-                algorithm = signature_algorithms.SHA256()
-        hash = signature_algorithms.Hash(algorithm, signature_algorithms.default_backend())
+                algorithm = SHA256()
+        hash = Hash(algorithm, default_backend())
         hash.update(message)
         return hash.finalize()
 

@@ -14,13 +14,23 @@
 # limitations under the License
 # -------------------------------------------------------------------------
 
+import os
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, padding
+from cryptography.hazmat.primitives.asymmetric.types import PublicKeyTypes
+from cryptography.x509 import Certificate
 from enum import IntEnum
-from typing import Union, Optional
+from typing import Union, Optional, Tuple
 
+from tls_packet.auth.master_secret import RSAPreMasterSecret
 from tls_packet.auth.master_secret import RSAPreMasterSecret, ClientDiffieHellmanPublic
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.security_params import TLSKeyExchangeTypes
+from tls_packet.auth.tls import TLS, TLSv1_2
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
+from tls_packet.auth.tls_named_curve import get_named_curve_by_type
+from tls_packet.auth.tls_server_key_exchange import NamedCurveType
 from tls_packet.packet import PARSE_ALL
 
 
@@ -77,43 +87,60 @@ class TLSClientKeyExchange(TLSHandshake):
                   case dh_rsa:
                   case dh_anon:
                       ClientDiffieHellmanPublic;
+                  case ecdhe_ecdsa:
+                  case ecdhe_rsa:
+                  case ecdhe_anon:
+                      ClientECDiffeHellmanPublic;       # See RFC8422
               } exchange_keys;
-
     """
-    def __init__(self, key: Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, bytes] = None, **kwargs):
+
+    def __init__(self, security_params: Optional[SecurityParameters] = None,
+                 key: Optional[Union[RSAPreMasterSecret, ClientDiffieHellmanPublic, bytes]] = None,
+                 client_hello_tls_version: Optional[TLS] = None,
+                 **kwargs):
+
         super().__init__(TLSHandshakeType.CLIENT_KEY_EXCHANGE, **kwargs)
-
-        if key is None or isinstance(key, bytes):
-            self._encoding = TLSClientKeyEncoding.UNKNOWN
-
-        elif isinstance(key, RSAPreMasterSecret):
-            self._encoding = TLSClientKeyEncoding.RSA_PREMASTER_SECRET
-
-        elif isinstance(key, ClientDiffieHellmanPublic):
-            self._encoding = TLSClientKeyEncoding.CLIENT_DIFFIE_HELLMAN_PUBLIC
-        else:
-            raise ValueError(f"Unknown/Unsupported Client Exchange Key Type: '{type(key)}'")
-
+        self._security_params = security_params
+        self._client_hello_tls_version = client_hello_tls_version
         self._key = key
-
-    @property
-    def encoding(self) -> TLSClientKeyEncoding:
-        return self._encoding
 
     @property
     def key(self) -> Union[RSAPreMasterSecret, ClientDiffieHellmanPublic]:
         return self._key
 
+    @property
+    def server_public_key(self) -> PublicKeyTypes:
+        return self._security_params.server_public_key
+
+    @property
+    def client_random(self) -> bytes:
+        return self._security_params.client_random
+
+    @property
+    def server_random(self) -> bytes:
+        return self._security_params.server_random
+
     @staticmethod
     def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")
 
+    def generate(self) -> Tuple[bytes, bytes]:
+        raise NotImplementedError("Implement in derive class")
+
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
-        key_buffer = bytes(self._key)
-        return super().pack(payload=key_buffer)
+        if self._key:
+            key_buffer = bytes(self._key)
+            return super().pack(payload=key_buffer)
+
+        pre_master_secret, encrypted_pre_master_secret = self.generate()
+        # TODO: Save off pre_master_secret
+
+        return super().pack(payload=encrypted_pre_master_secret)
+        # key_buffer = bytes(self._key)
+        # return super().pack(payload=key_buffer)
 
     @staticmethod
-    def create(security_params: SecurityParameters) -> 'TLSClientKeyExchange':
+    def create(tls_client: 'TLSCLient', **kwargs) -> 'TLSClientKeyExchange':
         """
         For all key exchange methods, the same algorithm is used to convert
         the pre_master_secret into the master_secret.  The pre_master_secret
@@ -147,22 +174,24 @@ class TLSClientKeyExchange(TLSHandshake):
            Note: Diffie-Hellman parameters are specified by the server and may
            be either ephemeral or contained within the server's certificate.
         """
-        # Look up are required inputs for the pre-master secret
-        server_certificate = security_params.server_certificate
-        server_public_key = security_params.server_public_key
-
-        client_public_key = security_params.client_public_key
-        client_private_key = security_params.client_private_key
-
-        key_exchange_type = security_params.cipher_suite.key_exchange_type  #
-
+        # # Look up are required inputs for the pre-master secret
+        # server_certificate = security_params.server_certificate
+        # server_public_key = security_params.server_public_key
+        #
+        # client_public_key = security_params.client_public_key
+        # client_private_key = security_params.client_private_key
+        security_params = tls_client.tx_security_parameters(active=False)
+        key_exchange_type = security_params.cipher_suite.key_exchange_type
+        # TODO: Initialize following dictionary at startup
         key_exchange = {
             TLSKeyExchangeTypes.DHE:   TLSClientKeyExchangeDH,
             TLSKeyExchangeTypes.ECDHE: TLSClientKeyExchangeECDH,
             TLSKeyExchangeTypes.RSA:   TLSClientKeyExchangeRSA
         }.get(key_exchange_type)
 
-        return key_exchange()
+        return key_exchange(security_params=security_params,
+                            client_hello_tls_version=tls_client.client_hello_tls_version,
+                            **kwargs)
 
 
 class TLSClientKeyExchangeDH(TLSClientKeyExchange):
@@ -201,15 +230,20 @@ class TLSClientKeyExchangeDH(TLSClientKeyExchange):
          The client's Diffie-Hellman public value (Yc).
     """
 
-    def __init__(self):
-        self.x = 0
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.p = None
+        self.g = None
+        self.public_key = None
+
+        raise NotImplementedError("TODO: Implement")
 
     @staticmethod
     def parse(frame: bytes, max_depth: Optional[int] = PARSE_ALL, **kwargs) -> Union[TLSHandshake, None]:
         """ Frame to RSAPreMasterSecret """
         raise NotImplementedError("TODO: Not yet supported")
 
-    def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
+    def generate(self) -> Tuple[bytes, bytes]:
         """
         For all key exchange methods, the same algorithm is used to convert
         the pre_master_secret into the master_secret.  The pre_master_secret
@@ -232,12 +266,69 @@ class TLSClientKeyExchangeDH(TLSClientKeyExchange):
            Note: Diffie-Hellman parameters are specified by the server and may
            be either ephemeral or contained within the server's certificate.
         """
-        return b''
+        raise NotImplementedError("TODO: Not supported yet")
+        # return b''
 
 
 class TLSClientKeyExchangeECDH(TLSClientKeyExchange):
-    pass
+    """
+    Client Elliptical Curve Diffie-Hellman Public Value  (RFC8422)
+
+        This message is used to convey ephemeral data relating to the key
+        exchange belonging to the client (such as its ephemeral ECDH public
+        key).
+
+    Structure of this message:
+        The TLS ClientKeyExchange message is extended as follows.
+
+        enum {
+            implicit,
+            explicit
+        } PublicValueEncoding;
+
+        o implicit, explicit: For ECC cipher suites, this indicates whether
+            the client’s ECDH public key is in the client’s certificate
+            ("implicit") or is provided, as an ephemeral ECDH public key, in
+            the ClientKeyExchange message ("explicit"). The implicit encoding
+            is deprecated and is retained here for backward compatibility
+            only.
+
+        struct {
+            ECPoint ecdh_Yc;
+        } ClientECDiffieHellmanPublic;
+
+        ecdh_Yc: Contains the client’s ephemeral ECDH public key as a byte
+                 string ECPoint.point, which may represent an elliptic curve point in
+                 uncompressed format.
+
+        struct {
+            select (KeyExchangeAlgorithm) {
+                case ec_diffie_hellman: ClientECDiffieHellmanPublic;
+            } exchange_keys;
+        } ClientKeyExchange;
+
+    """
+
+    def __init__(self, named_curve_type: Optional[NamedCurveType] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.named_curve = get_named_curve_by_type(named_curve_type)
+        self.server_public_key = self.server_cert.public_key()
+
+    def generate(self) -> Tuple[bytes, bytes]:
+        key = ec.generate_private_key(self.named_curve, default_backend())
+        shared_key = key.exchange(ec.ECDH(), self.server_public_key)
+        serv_key = self.server_public_key.public_bytes(serialization.Encoding.DER,
+                                                       serialization.PublicFormat.SubjectPublicKeyInfo)
+        return shared_key, serv_key
 
 
 class TLSClientKeyExchangeRSA(TLSClientKeyExchange):
-    pass
+    def __init__(self, random: Optional[bytes] = None, **kwargs):
+        super().__init__(**kwargs)
+        self._random = random or os.urandom(46)
+
+    def generate(self) -> Tuple[bytes, bytes]:
+        """ Create the pre-master secret and also an encrypted version for transmission"""
+        secret = bytes(self._client_hello_tls_version) + self._random
+        encrypted = self.server_public_key.encrypt(secret, padding=padding.PKCS1v15())
+        return secret, encrypted

@@ -16,7 +16,6 @@
 
 import os
 import struct
-import sys
 from typing import Union, Optional, Iterable
 
 from tls_packet.auth.cipher_suites import CipherSuite
@@ -24,9 +23,8 @@ from tls_packet.auth.security_params import TLSCompressionMethod
 from tls_packet.auth.tls import TLS
 from tls_packet.auth.tls import TLSv1_2, TLSv1_3
 from tls_packet.auth.tls_extension import TLSHelloExtension
-from tls_packet.auth.tls_extension import TLSHelloExtension
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
-from tls_packet.packet import PacketPayload, DecodeError, PARSE_ALL
+from tls_packet.packet import DecodeError, PARSE_ALL
 
 
 class TLSServerHello(TLSHandshake):
@@ -53,7 +51,7 @@ class TLSServerHello(TLSHandshake):
     def __init__(self, session,
                  cipher: Optional[Union[CipherSuite]] = None,
                  length: Optional[int] = None,  # For decode only
-                 version: Optional[int] = 0,
+                 tls_version: Optional[int] = 0,
                  random_data: Optional[Union[bytes, None]] = None,
                  compression: Optional[TLSCompressionMethod] = TLSCompressionMethod.NULL_METHOD,
                  session_id: Optional[int] = 0,
@@ -61,7 +59,7 @@ class TLSServerHello(TLSHandshake):
         super().__init__(TLSHandshakeType.SERVER_HELLO, length=length, session=session, **kwargs)
 
         # Error checks
-        self.version = version or (int(session.tls_version) if session is not None else int(TLSv1_2()))
+        self._version = tls_version or (int(session.tls_version) if session is not None else int(TLSv1_2()))
         self._random_bytes = random_data or os.urandom(32)
         self._session_id = session_id
         self._cipher = cipher
@@ -74,7 +72,7 @@ class TLSServerHello(TLSHandshake):
         # And used it supported the parse_key_exchange method
 
         # Error checks
-        if self.version == int(TLSv1_3()):
+        if self._version == int(TLSv1_3()):
             raise NotImplementedError("TLSServerHello: TLSv1.3 not yet supported")
 
         if len(self._random_bytes) != 32:
@@ -87,6 +85,13 @@ class TLSServerHello(TLSHandshake):
     def cipher_suite(self) -> CipherSuite:
         """ Cipher Suite selected by the server """
         return self._cipher
+
+    @property
+    def negotiated_tls_version(self) -> TLS:
+        """ Version the server wants to use"""
+        return self._version
+
+    version = negotiated_tls_version
 
     @property
     def compression_method(self) -> TLSCompressionMethod:
@@ -135,7 +140,7 @@ class TLSServerHello(TLSHandshake):
         version = TLS.get_by_code(version)
 
         print()
-        print(f"Server Hello Received:")
+        print("Server Hello Received:")
         print(f" Version    : {version}")
         print(f" Random Data: {random_data.hex()}")
         print(f" Session ID : {session_id}")
@@ -150,17 +155,16 @@ class TLSServerHello(TLSHandshake):
         security_params = kwargs.get("security_params")
 
         if security_params:
-            security_params.tls_version = version               # TODO: Make these set routines 'safe' just like the copy
             security_params.server_random = random_data
             security_params.compression_algorithm = compression
-
             security_params.cipher_suite = CipherSuite.get_from_id(version, cipher)
 
             if security_params.cipher_suite is None:
                 raise DecodeError(f"ServerHello: Unsupported cipher suite selected: {cipher:#04x}")
 
-        return TLSServerHello(None, cipher, version=version, length=msg_len, random_data=random_data, compression=compression,
-                              session_id=session_id, extensions=extensions, original_frame=frame, **kwargs)
+        return TLSServerHello(None, cipher, tls_version=version, length=msg_len, random_data=random_data,
+                              compression=compression, session_id=session_id, extensions=extensions,
+                              original_frame=frame, **kwargs)
 
     def pack(self, payload: Optional[Union[bytes, None]] = None) -> bytes:
         raise NotImplementedError("TODO: Not yet implemented since we are functioning as a client")

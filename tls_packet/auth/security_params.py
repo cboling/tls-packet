@@ -39,11 +39,13 @@ class TLSKeyExchangeTypes(IntEnum):
     RSA = 1
     DHE = 2
     ECDHE = 3
+    ECDHE_ECDSA = 4  # Added by RFC8422
+    ECDHE_RSA = 5  # Added by RFC8422
 
-    PSK = 4
-    RSA_PSK = 5
-    DHE_PSK = 6
-    ECDHE_PSK = 7
+    PSK = 10
+    RSA_PSK = 11
+    DHE_PSK = 12
+    ECDHE_PSK = 13
 
     def name(self) -> str:
         return super().name.replace("_", " ").capitalize()
@@ -96,7 +98,6 @@ class SecurityParameters:
     """
 
     def __init__(self,
-                 tls_version: Optional[TLS] = None,
                  prf_algorithm: Optional[bytes] = None,  # PRFAlgorithm
                  compression_algorithm: Optional[TLSCompressionMethod] = TLSCompressionMethod.NULL_METHOD,
                  master_secret: Optional[bytes] = None,
@@ -111,11 +112,10 @@ class SecurityParameters:
         # Desired ones
         client_random = client_random or int(datetime.now().timestamp()).to_bytes(4, 'big') + os.urandom(28)
 
-        self.tls_version = tls_version
         self.prf_algorithm = prf_algorithm
         self.compression_algorithm = compression_algorithm
 
-        self.master_secret = master_secret
+        self._master_secret = master_secret
 
         self.client_random = client_random
         self.client_certificate = client_certificate
@@ -128,8 +128,9 @@ class SecurityParameters:
 
         self.cipher_suite = cipher_suite
 
-        # Ones from ssl book - TODO  Get rid of these
-        # self.master_key: bytes = b""
+    @property
+    def hash_size(self) -> int:
+        return 48  # TODO: Implement me
 
     @property
     def client_public_key(self) -> Union[PublicKeyTypes, None]:
@@ -148,6 +149,20 @@ class SecurityParameters:
         if self._server_public_key is None and self.server_certificate is not None:
             self._server_public_key = self.server_certificate.public_key()
         return self._server_public_key
+
+    @server_public_key.setter
+    def server_public_key(self, key: Union[bytes, PublicKeyTypes]) -> None:
+        if isinstance(key, bytes):
+            key = None  # TODO: Convert to a PublicKeyType
+        self._server_public_key = key
+
+    @property
+    def master_secret(self) -> bytes:
+        return self._master_secret
+
+    @master_secret.setter
+    def master_secret(self, secret: bytes) -> None:
+        self._master_secret = secret
 
     def copy(self, **kwargs) -> 'SecurityParameters':
         """ Create a copy of the security parameters and optionally override any existing values """

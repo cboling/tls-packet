@@ -199,8 +199,8 @@ class ASN_1_Cert:
             raise DecodeError(f"ASN.1Cert: message truncated: Expected at least {required} bytes, got: {frame_len}")
 
         length = int.from_bytes(frame[0:3], 'big')
-        if frame_len < length:
-            raise DecodeError(f"ASN.1Cert: message truncated: Certificate should be {required} bytes, only {frame_len} bytes left")
+        if frame_len - 3 < length:
+            raise DecodeError(f"ASN.1Cert: message truncated: Certificate should be {length} bytes, only {frame_len - 3} bytes left")
 
         # TODO: Eventually need a actual class here
         data = frame[ASN_1_Cert.header_size:length + ASN_1_Cert.header_size]

@@ -80,7 +80,8 @@ class TLSClient:
 
         self.auth_socket = auth_socket
 
-        self._tls_version = tls_version or TLSv1_2()
+        self._client_hello_tls_version = tls_version or TLSv1_2()
+        self._negotiated_tls_version = self._client_hello_tls_version
 
         # TODO: See what we can get rid of...
         # TODO: Move read-only attributes to protected names and provide @property access
@@ -133,13 +134,13 @@ class TLSClient:
         #         self._k_recv = ""
         #
         self._security_parameters = {
-            'active_tx':  SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+            'active_tx':  SecurityParameters().copy(client_random=client_random,
                                                     client_certificate=self.certificate),
-            'active_rx':  SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+            'active_rx':  SecurityParameters().copy(client_random=client_random,
                                                     client_certificate=self.certificate),
-            'pending_tx': SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+            'pending_tx': SecurityParameters().copy(client_random=client_random,
                                                     client_certificate=self.certificate),
-            'pending_rx': SecurityParameters().copy(tls_version=self._tls_version, client_random=client_random,
+            'pending_rx': SecurityParameters().copy(client_random=client_random,
                                                     client_certificate=self.certificate)
         }
 
@@ -172,7 +173,10 @@ class TLSClient:
 
     @property
     def tls_version(self) -> TLS:
-        return self._tls_version
+        """ Get current TLS Version for any outgoing frames """
+        # Initially client-hello and negotiated- versions are the same. After receipt of the
+        # server hello, the negotiated version may change
+        return self._negotiated_tls_version
 
     def set_tls_version(self, version: TLS) -> bool:
         """ Call this routine with the version that the server requests in the Server Hello """
@@ -182,12 +186,13 @@ class TLSClient:
                   file=sys.stderr)
             return False
 
-        # Set it across the board in all locations. We must use what server suggests if we can
-        self._tls_version = version
-        for key in ('active_tx', 'active_rx', 'pending_tx', 'pending_rx'):
-            self._security_parameters[key].tls_version = version
-
+        # Save this for future requests
+        self._negotiated_tls_version = version
         return True
+
+    @property
+    def client_hello_tls_version(self) -> TLS:
+        return self._client_hello_tls_version
 
     @property
     def received_handshake_records(self) -> Tuple['TLSHandshakeRecord']:

@@ -14,21 +14,18 @@
 # limitations under the License
 # -------------------------------------------------------------------------
 import sys
-from cryptography.x509 import Certificate, Extension, Extensions, ObjectIdentifier, Version, Name
+from cryptography.x509 import Extensions, ObjectIdentifier, Version, Name
 from transitions import Machine, State
 from transitions.extensions import GraphMachine
-from typing import Optional, Tuple, List, Any, Union
+from typing import Optional, Tuple, Any, Union
 
 from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters, TLSCompressionMethod
-from tls_packet.auth.tls import TLSv1_2
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert
-from tls_packet.auth.tls_certificate_request import TLSCertificateRequest
-from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurve, NamedCurveType
+from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange
 from tls_packet.auth.tls_record import TLSChangeCipherSpecRecord, TLSChangeCipherSpecType
 from tls_packet.auth.tls_server_hello import TLSServerHello
 from tls_packet.auth.tls_server_key_exchange import TLSServerKeyExchange
-from tls_packet.auth.tls_signature_algorithm import RsaPkcs1Md5Sha1
 
 
 class TLSClientStateMachine(Machine):
@@ -212,7 +209,7 @@ class TLSClientStateMachine(Machine):
             {"trigger": "start", "source": START, "dest": "="},
         """
         print(f"{self.state}: entry")
-        self._k_send = ""
+        self._k_send = ""  # For TLSv1.3+: The notation "k_{send,recv} = foo" means "set the send/recv key to the given key".
         self._k_recv = ""
 
         # Construct and send Client Hello
@@ -395,8 +392,16 @@ class TLSClientStateMachine(Machine):
             pkt_data += bytes(record)
             print(f"Record: {record}, Data Len: {len(pkt_data)} bytes")
 
-        key_exchange = self._client_key_exchange()
-        record = self._session.create_tls_handshake_record(key_exchange)
+        pre_master_secret, encrypted_premaster_secret = self._client_key_exchange()
+        # Save off to future rx_/tx_parameters
+        tx_params = self.tx_security_parameters(active=False)
+        rx_params = self.rx_security_parameters(active=False)
+
+        master_secret = tx_params.cipher_suite.master_secret(pre_master_secret, tx_params, self.session.tls_version)
+        tx_params.master_secret = rx_params.master_secret = master_secret
+
+        client_key = TLSClientKeyExchange(key=encrypted_premaster_secret)
+        record = self._session.create_tls_handshake_record(client_key)
         pkt_data += bytes(record)
         print(f"Record: {record}, Data Len: {len(pkt_data)} bytes")
 
@@ -429,7 +434,7 @@ class TLSClientStateMachine(Machine):
 
         return TLSCertificate(cert_list, length=cert_list.length)
 
-    def _client_key_exchange(self) -> 'TLSClientKeyExchange':
+    def _client_key_exchange(self) -> Tuple[bytes, bytes]:
         from tls_packet.auth.tls_client_key_exchange import TLSClientKeyExchange
         # Look up what the server sent us
         #
@@ -440,37 +445,16 @@ class TLSClientStateMachine(Machine):
         rx_parms = self.rx_security_parameters(active=False)
         tx_parms = self.tx_security_parameters(active=False)
 
-        # pre_master_secr
-
-        server_certificate = rx_parms.server_certificate
-
-        # TODO: What do we need from server_key_exchange.  Save to Rx_parms
+        # If there was a Server Key Exchange message, pull the temporary RSA key if present. This
+        # is used to encrypt the pre-master-secret if RSA
         server_key_exchange = next((record.get_layer("TLSServerKeyExchange") for record in self.session.received_handshake_records
                                     if record.has_layer("TLSServerKeyExchange")), None)
+        public_key = server_key_exchange.rsa_public_key if server_key_exchange else None
+        if public_key:
+            rx_parms.server_public_key = tx_parms.server_public_key = public_key
 
-        return TLSClientKeyExchange.create(self.session)
-
-        server_certificate = security_params.server_certificate
-        server_public_key = security_params.server_public_key
-
-        client_public_key = security_params.client_public_key
-        client_private_key = security_params.client_private_key
-
-        key_exchange_type = security_params.cipher_suite.key_exchange_type
-        signature = b""
-
-        # public_key = self._session.public_key
-        # private_key = self._session.private_key
-        # self._session.keyh
-        # self.public_key = keys.get("public")
-        # self.private_key = keys.get("private")
-
-        # certificate = self.session.certificate.tbs_certificate_bytes if self.session.certificate is not None else b''
-        # ca_certificate = self.session.ca_certificate.tbs_certificate_bytes if self.session.ca_certificate is not None else b''
-        # pub_cert = ASN_1_Cert(certificate)
-        # ca_cert = ASN_1_Cert(ca_certificate)  # TODO: Need to support a list?
-        # cert_list = ASN_1_CertList([pub_cert, ca_cert])
-        return TLSClientKeyExchange()
+        client_key = TLSClientKeyExchange.create(self.session)
+        return client_key.generate()
 
     def _certificate_verify(self, new_client_records: bytes) -> 'TLSCertificateVerify':
         from tls_packet.auth.tls_certificate_verify import TLSCertificateVerify

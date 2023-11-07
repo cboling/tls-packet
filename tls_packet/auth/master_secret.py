@@ -54,44 +54,44 @@ class RSAPreMasterSecret:
          generate the master secret, as specified in Section 8.1.
 
     Note: The version number in the PreMasterSecret is the version
-    offered by the client in the ClientHello.client_version, not the
-    version negotiated for the connection.  This feature is designed to
-    prevent rollback attacks.  Unfortunately, some old implementations
-    use the negotiated version instead, and therefore checking the
-    version number may lead to failure to interoperate with such
-    incorrect client implementations.
+          offered by the client in the ClientHello.client_version, not the
+          version negotiated for the connection.  This feature is designed to
+          prevent rollback attacks.  Unfortunately, some old implementations
+          use the negotiated version instead, and therefore checking the
+          version number may lead to failure to interoperate with such
+          incorrect client implementations.
 
-    Client implementations MUST always send the correct version number in
-    PreMasterSecret.  If ClientHello.client_version is TLS 1.1 or higher,
-    server implementations MUST check the version number as described in
-    the note below.  If the version number is TLS 1.0 or earlier, server
-    implementations SHOULD check the version number, but MAY have a
-    configuration option to disable the check.  Note that if the check
-    fails, the PreMasterSecret SHOULD be randomized as described below.
+          Client implementations MUST always send the correct version number in
+          PreMasterSecret.  If ClientHello.client_version is TLS 1.1 or higher,
+          server implementations MUST check the version number as described in
+          the note below.  If the version number is TLS 1.0 or earlier, server
+          implementations SHOULD check the version number, but MAY have a
+          configuration option to disable the check.  Note that if the check
+          fails, the PreMasterSecret SHOULD be randomized as described below.
 
     Note: Attacks discovered by Bleichenbacher [BLEI] and Klima et al.
-    [KPR03] can be used to attack a TLS server that reveals whether a
-    particular message, when decrypted, is properly PKCS#1 formatted,
-    contains a valid PreMasterSecret structure, or has the correct
-    version number.
+          [KPR03] can be used to attack a TLS server that reveals whether a
+          particular message, when decrypted, is properly PKCS#1 formatted,
+          contains a valid PreMasterSecret structure, or has the correct
+          version number.
 
-    As described by Klima [KPR03], these vulnerabilities can be avoided
-    by treating incorrectly formatted message blocks and/or mismatched
-    version numbers in a manner indistinguishable from correctly
-    formatted RSA blocks.  In other words:
+          As described by Klima [KPR03], these vulnerabilities can be avoided
+          by treating incorrectly formatted message blocks and/or mismatched
+          version numbers in a manner indistinguishable from correctly
+          formatted RSA blocks.  In other words:
 
-      1. Generate a string R of 46 random bytes
+          1. Generate a string R of 46 random bytes
 
-      2. Decrypt the message to recover the plaintext M
+          2. Decrypt the message to recover the plaintext M
 
-      3. If the PKCS#1 padding is not correct, or the length of message
-         M is not exactly 48 bytes:
-            pre_master_secret = ClientHello.client_version || R
-         else If ClientHello.client_version <= TLS 1.0, and version
-         number check is explicitly disabled:
-            pre_master_secret = M
-         else:
-            pre_master_secret = ClientHello.client_version || M[2..47]
+          3. If the PKCS#1 padding is not correct, or the length of message
+             M is not exactly 48 bytes:
+                pre_master_secret = ClientHello.client_version || R
+             else If ClientHello.client_version <= TLS 1.0, and version
+             number check is explicitly disabled:
+                pre_master_secret = M
+             else:
+                pre_master_secret = ClientHello.client_version || M[2..47]
 
     Note that explicitly constructing the pre_master_secret with the
     ClientHello.client_version produces an invalid master_secret if the
@@ -320,7 +320,6 @@ class ClientDiffieHellmanPublic:
       dh_Yc
          The client's Diffie-Hellman public value (Yc).
     """
-
     def __init__(self):
         self.x = 0
 
@@ -353,3 +352,4 @@ class ClientDiffieHellmanPublic:
            be either ephemeral or contained within the server's certificate.
         """
         return b''
+

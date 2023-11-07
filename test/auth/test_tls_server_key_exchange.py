@@ -22,6 +22,7 @@ from tls_packet.auth.cipher_suites import CipherSuite
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls import TLSv1
 from tls_packet.auth.tls_certificate import ASN_1_Cert
+from tls_packet.auth.tls_client import TLSClient
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
 from tls_packet.auth.tls_named_curve import ECCurveType, NamedCurveType
 from tls_packet.auth.tls_record import TLSRecord, TLSHandshakeRecord, TLSRecordContentType
@@ -34,8 +35,9 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
         cipher_suite = CipherSuite.get_from_id(TLSv1(), 0xC014)
         cls.curve_type = ECCurveType.NAMED_CURVE
         cls.named_curve_type = NamedCurveType.SECP256R1
-        cls.client_random = "13f856553bbe73787b0acf60bf2a644812804a4fd62328e94984b35299cad491"
-        cls.server_random = "391c112416c4dee2aa08c579eb4803f77d9ecfdcb7fe7eb9bf0e9327640d11ca"
+
+        client_random = "13f856553bbe73787b0acf60bf2a644812804a4fd62328e94984b35299cad491"
+        server_random = "391c112416c4dee2aa08c579eb4803f77d9ecfdcb7fe7eb9bf0e9327640d11ca"
         cls.pubkey = "04ceea15247ac22f63d9393d1a160fe67e1962d173a2b75f7fc393fc721467b264d47c1a1915c4f2d29c8d2152b511bfafceb6dddb7ccf9967be094533c1731275"
         cls.signature = ("d378956fca3ba101b8b95189f254f867e4ab5b28a9d1f9481bffdae051a5fea39d036d8b1121719faf3dfa8aa45f755e5c174b5e606778fc27638f99f71cab8" +
                          "6e84b730967897d5f12a3fe152dd06c5569cdb624f0ef3f4a8100e0aa3ebdce6c5395d5823a0b39ba066e5c462e6bc442d01b1c5840943ec0023aedcecde827" +
@@ -46,10 +48,23 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
         asn_cert = ASN_1_Cert.parse(bytes.fromhex(server_certificate))
         server_cert = asn_cert.x509_certificate
 
-        cls.security_params = SecurityParameters(tls_version=TLSv1(), cipher_suite=cipher_suite,
-                                                 client_random=bytes.fromhex(cls.client_random),
-                                                 server_random=bytes.fromhex(cls.server_random),
-                                                 server_certificate=server_cert)
+        security_params = SecurityParameters(cipher_suite=cipher_suite,
+                                             client_random=bytes.fromhex(client_random),
+                                             server_random=bytes.fromhex(server_random),
+                                             server_certificate=server_cert)
+
+        tls_client = TLSClient(None,
+                               tls_version=TLSv1(),
+                               random_data=bytes.fromhex(client_random))
+
+        rx_params = tls_client.rx_security_parameters(active=False)
+        tx_params = tls_client.tx_security_parameters(active=False)
+        rx_params.cipher_suite = tx_params.cipher_suite = cipher_suite
+        rx_params.server_random = tx_params.server_random = bytes.fromhex(server_random)
+        rx_params.server_certificate = tx_params.server_certificate = server_cert
+
+        cls.security_params = security_params
+        cls.tls_client = tls_client
 
     def test_ECCurveType(self):
         # Change underscores to spaces
@@ -94,7 +109,7 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
     def test_FrameSerialize(self):
         skey = TLSServerKeyExchangeECDH(self.curve_type, self.named_curve_type,
                                         bytes.fromhex(self.pubkey),
-                                        bytes.fromhex(self.signature), server_params=self.security_params)
+                                        bytes.fromhex(self.signature), security_params=self.security_params)
         self.assertEqual(skey.msg_type, TLSHandshakeType.SERVER_KEY_EXCHANGE)
         with self.assertRaises(NotImplementedError):
             # TODO: Not yet supported
@@ -154,7 +169,8 @@ class TestTLSServerKeyExchangeECDH(unittest.TestCase):
         self.assertEqual(skey.key.hex(), self.pubkey)
         self.assertEqual(skey.signature.hex(), self.signature)
 
-        algorithm = self.security_params.cipher_suite.signature_algorithm(self.security_params)
+        algorithm = self.security_params.cipher_suite.signature_algorithm(self.security_params,
+                                                                          self.tls_client.tls_version)
         valid = algorithm.verify(skey.signature, skey.server_params)
 
         self.assertTrue(valid)

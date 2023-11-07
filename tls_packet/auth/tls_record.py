@@ -255,7 +255,6 @@ class TLSChangeCipherSpecRecord(TLSRecord):
     during the handshake after the security parameters have been agreed
     upon, but before the verifying finished message is sent
     """
-
     def __init__(self, spec_type: TLSChangeCipherSpecType, **kwargs):
         super().__init__(TLSRecordContentType.CHANGE_CIPHER_SPEC, None, **kwargs)
         self._spec_type = spec_type
