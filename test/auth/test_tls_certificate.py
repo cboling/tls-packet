@@ -16,8 +16,9 @@
 # pylint: skip-file
 
 import unittest
-
+from cryptography.hazmat.primitives import serialization
 from mocks.util import assertGeneratedFrameEquals
+
 from tls_packet.auth.security_params import SecurityParameters
 from tls_packet.auth.tls_certificate import TLSCertificate, ASN_1_Cert, ASN_1_CertList
 from tls_packet.auth.tls_handshake import TLSHandshake, TLSHandshakeType
@@ -132,8 +133,8 @@ class TestTLSCertificate(unittest.TestCase):
         self.assertEqual(len(cert.certificates), 2)
         cert_1 = cert.certificates[0]
         cert_2 = cert.certificates[1]
-        self.assertEqual(cert_1.certificate.hex(), _cert_1)
-        self.assertEqual(cert_2.certificate.hex(), _cert_2)
+        self.assertEqual(cert_1.x509_certificate.public_bytes(serialization.Encoding.DER).hex(), _cert_1)
+        self.assertEqual(cert_2.x509_certificate.public_bytes(serialization.Encoding.DER).hex(), _cert_2)
 
     def test_RecordSerialize(self):
         cert = TLSCertificate(self.cert_list)
@@ -162,8 +163,8 @@ class TestTLSCertificate(unittest.TestCase):
         self.assertEqual(len(cert.certificates), 2)
         cert_1 = cert.certificates[0]
         cert_2 = cert.certificates[1]
-        self.assertEqual(cert_1.certificate.hex(), _cert_1)
-        self.assertEqual(cert_2.certificate.hex(), _cert_2)
+        self.assertEqual(cert_1.x509_certificate.public_bytes(serialization.Encoding.DER).hex(), _cert_1)
+        self.assertEqual(cert_2.x509_certificate.public_bytes(serialization.Encoding.DER).hex(), _cert_2)
 
 
 if __name__ == '__main__':
